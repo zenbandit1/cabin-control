@@ -1,0 +1,25 @@
+{
+  "name": "Cabin Airflow Control",
+  "short_name": "CabinCtrl",
+  "description": "BLE control interface for cabin airflow system",
+  "start_url": "./cabin_control_pwa.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#1a1a1a",
+  "theme_color": "#00aaff",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

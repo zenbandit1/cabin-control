@@ -1,0 +1,988 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#1a1a1a">
+    <title>Cabin Control</title>
+    <link rel="manifest" href="./manifest.json">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #1a1a1a;
+            color: #ffffff;
+            overflow-x: hidden;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #1a1a1a 0%, #2a2a2a 100%);
+            padding: 20px;
+            border-bottom: 2px solid #00aaff;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        
+        .header h1 {
+            color: #00aaff;
+            font-size: 24px;
+            margin-bottom: 10px;
+        }
+        
+        .status-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            background: #2a2a2a;
+            border-radius: 8px;
+        }
+        
+        .status-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #cc0000;
+            margin-right: 8px;
+            display: inline-block;
+        }
+        
+        .status-indicator.connected {
+            background: #00cc00;
+        }
+        
+        .connect-btn {
+            background: #00aaff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        
+        .connect-btn:active {
+            background: #0088cc;
+        }
+        
+        .container {
+            padding: 20px;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        
+        .mode-toggle {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .mode-btn {
+            flex: 1;
+            padding: 15px;
+            border: 2px solid #444;
+            background: #2a2a2a;
+            color: #888;
+            font-size: 18px;
+            font-weight: 600;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .mode-btn.active {
+            border-color: #00aaff;
+            background: #00aaff;
+            color: white;
+        }
+        
+        .zone-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .zone-card {
+            background: #2a2a2a;
+            border-radius: 12px;
+            padding: 15px;
+            border: 2px solid #444;
+            transition: all 0.2s;
+        }
+        
+        .zone-card.enabled {
+            border-color: #00aaff;
+        }
+        
+        .zone-card.priority {
+            border-color: #ffaa00;
+            background: linear-gradient(135deg, #2a2a2a 0%, #3a2a0a 100%);
+        }
+        
+        .zone-card.disabled {
+            border-color: #cc0000;
+            opacity: 0.5;
+        }
+        
+        .zone-header {
+            font-weight: 600;
+            margin-bottom: 10px;
+            color: #00aaff;
+        }
+        
+        .zone-temp {
+            font-size: 24px;
+            font-weight: 700;
+            margin: 10px 0;
+        }
+        
+        .zone-humidity {
+            font-size: 14px;
+            color: #888;
+        }
+        
+        .zone-toggle {
+            width: 100%;
+            padding: 8px;
+            margin-top: 10px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        
+        .zone-toggle.enabled {
+            background: #00aaff;
+            color: white;
+        }
+        
+        .zone-toggle.disabled {
+            background: #444;
+            color: #888;
+        }
+
+        .zone-priority-btn {
+            width: 100%;
+            padding: 8px;
+            margin-top: 8px;
+            border: 2px solid #ffaa00;
+            background: #2a2a2a;
+            color: #ffaa00;
+            font-size: 13px;
+            font-weight: 600;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .zone-priority-btn:disabled {
+            border-color: #444;
+            background: #1a1a1a;
+            color: #666;
+            cursor: not-allowed;
+        }
+
+        .zone-priority-btn.active {
+            background: #ffaa00;
+            color: #000;
+        }
+
+        .priority-info {
+            font-size: 11px;
+            color: #888;
+            text-align: center;
+            margin-top: 4px;
+        }
+
+        .airflow-bars-container {
+            background: #2a2a2a;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        .airflow-title {
+            text-align: center;
+            font-weight: 600;
+            margin-bottom: 15px;
+            color: #00aaff;
+            font-size: 18px;
+        }
+
+        .bars-wrapper {
+            display: flex;
+            justify-content: space-around;
+            align-items: flex-end;
+            height: 275px;
+            background: #1a1a1a;
+            border-radius: 8px;
+            padding: 35px 10px 15px 10px;
+            position: relative;
+            touch-action: none;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        .airflow-bar {
+            flex: 1;
+            max-width: 70px;
+            background: linear-gradient(180deg, #00aaff 0%, #0088cc 100%);
+            border-radius: 8px 8px 0 0;
+            position: relative;
+            transition: background 0.3s;
+            cursor: ns-resize;
+            touch-action: none;
+            min-height: 20px;
+        }
+
+        .airflow-bar.dragging {
+            background: linear-gradient(180deg, #00ddff 0%, #00aaff 100%);
+        }
+
+        .airflow-bar.priority {
+            background: linear-gradient(180deg, #ffaa00 0%, #dd8800 100%);
+        }
+
+        .airflow-bar.disabled {
+            background: #444;
+            opacity: 0.5;
+        }
+
+        .bar-label {
+            position: absolute;
+            bottom: -35px;
+            left: 0;
+            right: 0;
+            text-align: center;
+            font-size: 12px;
+            font-weight: 600;
+            color: #888;
+        }
+
+        .bar-value {
+            position: absolute;
+            top: -25px;
+            left: 0;
+            right: 0;
+            text-align: center;
+            font-size: 16px;
+            font-weight: 700;
+            color: #00aaff;
+        }
+
+        .bar-value.disabled {
+            color: #666;
+        }
+
+        @media (max-width: 480px) {
+            .zone-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🚢 Cabin Airflow Control</h1>
+        <div class="status-bar">
+            <div>
+                <span class="status-indicator" id="statusIndicator"></span>
+                <span id="statusText">Disconnected</span>
+            </div>
+            <button class="connect-btn" id="connectBtn" onclick="toggleConnection()">Connect</button>
+        </div>
+    </div>
+    
+    <div class="container">
+        <!-- Mode Toggle -->
+        <div class="mode-toggle">
+            <button class="mode-btn" id="manualBtn" onclick="setMode(false)">MANUAL</button>
+            <button class="mode-btn active" id="autoBtn" onclick="setMode(true)">AUTO</button>
+        </div>
+        
+        <!-- Zone Cards -->
+        <div class="zone-grid">
+            <div class="zone-card enabled" id="zoneSaloon">
+                <div class="zone-header">Saloon</div>
+                <div class="zone-temp" id="tempSaloon">--°C</div>
+                <div class="zone-humidity" id="humSaloon">--% RH</div>
+                <button class="zone-toggle enabled" onclick="toggleZone(0)">ON</button>
+                <button class="zone-priority-btn" id="prioSaloon" onclick="setPriority(0)" disabled>
+                    Set Priority
+                </button>
+                <div class="priority-info">AUTO mode only</div>
+            </div>
+            <div class="zone-card enabled" id="zoneGalley">
+                <div class="zone-header">Galley</div>
+                <div class="zone-temp" id="tempGalley">--°C</div>
+                <div class="zone-humidity" id="humGalley">--% RH</div>
+                <button class="zone-toggle enabled" onclick="toggleZone(1)">ON</button>
+                <button class="zone-priority-btn" id="prioGalley" onclick="setPriority(1)" disabled>
+                    Set Priority
+                </button>
+                <div class="priority-info">AUTO mode only</div>
+            </div>
+            <div class="zone-card enabled" id="zoneBerth">
+                <div class="zone-header">Berth</div>
+                <div class="zone-temp" id="tempBerth">--°C</div>
+                <div class="zone-humidity" id="humBerth">--% RH</div>
+                <button class="zone-toggle enabled" onclick="toggleZone(2)">ON</button>
+                <button class="zone-priority-btn" id="prioBerth" onclick="setPriority(2)" disabled>
+                    Set Priority
+                </button>
+                <div class="priority-info">AUTO mode only</div>
+            </div>
+        </div>
+        
+        <!-- Airflow Bars (Always Visible) -->
+        <div class="airflow-bars-container">
+            <div class="airflow-title" id="airflowTitle">Airflow Distribution</div>
+            <div class="bars-wrapper" id="barsWrapper">
+                <div class="airflow-bar" id="barSaloon" style="height: 33%;">
+                    <div class="bar-value" id="valueSaloon">33%</div>
+                    <div class="bar-label">Saloon</div>
+                </div>
+                <div class="airflow-bar" id="barGalley" style="height: 34%;">
+                    <div class="bar-value" id="valueGalley">34%</div>
+                    <div class="bar-label">Galley</div>
+                </div>
+                <div class="airflow-bar" id="barBerth" style="height: 33%;">
+                    <div class="bar-value" id="valueBerth">33%</div>
+                    <div class="bar-label">Berth</div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+    
+    <script>
+        // BLE Configuration
+        const SERVICE_UUID = 'f0c7a69c-4a64-4c6a-a3e2-608764a7c4b1';
+        const STATE_CHAR_UUID = 'f0c7a69c-4a64-4c6a-a3e2-608764a7c4b2';
+        const SENSOR_CHAR_UUID = 'f0c7a69c-4a64-4c6a-a3e2-608764a7c4b4';
+        const COMMAND_CHAR_UUID = 'f0c7a69c-4a64-4c6a-a3e2-608764a7c4b3';
+        
+        // Command opcodes
+        const OP_SET_MODE = 0x01;
+        const OP_SET_ZONE_ENABLED = 0x02;
+        const OP_SET_SHARE = 0x03;
+        const OP_CLEAR_PRIORITY = 0x04;
+        const OP_START_PRIORITY = 0x05;
+        
+        // BLE objects
+        let device = null;
+        let stateChar = null;
+        let sensorChar = null;
+        let commandChar = null;
+        
+        // State
+        const ZONE_NAMES = ['Saloon', 'Galley', 'Berth'];
+        let currentMode = 'AUTO';
+        let currentPriority = null;
+        let zoneEnabled = [true, true, true];
+        let lastBerthShare = 50;  // Track last known berth_share for ratio recovery from 0%
+        
+        // Check Web Bluetooth support
+        if (!navigator.bluetooth) {
+            alert('Web Bluetooth not supported. Use Chrome/Edge on Android or macOS/iOS 16+');
+        }
+        
+        async function toggleConnection() {
+            if (device && device.gatt.connected) {
+                device.gatt.disconnect();
+            } else {
+                await connect();
+            }
+        }
+        
+        async function connect() {
+            try {
+                device = await navigator.bluetooth.requestDevice({
+                    filters: [{ name: 'Cabin' }],
+                    optionalServices: [SERVICE_UUID]
+                });
+                
+                device.addEventListener('gattserverdisconnected', onDisconnected);
+                
+                const server = await device.gatt.connect();
+                const service = await server.getPrimaryService(SERVICE_UUID);
+
+                stateChar = await service.getCharacteristic(STATE_CHAR_UUID);
+                sensorChar = await service.getCharacteristic(SENSOR_CHAR_UUID);
+                commandChar = await service.getCharacteristic(COMMAND_CHAR_UUID);
+
+                await stateChar.startNotifications();
+                stateChar.addEventListener('characteristicvaluechanged', onStateChanged);
+
+                await sensorChar.startNotifications();
+                sensorChar.addEventListener('characteristicvaluechanged', onSensorChanged);
+
+                // Read initial state
+                const value = await stateChar.readValue();
+                decodeState(value);
+                
+                updateConnectionUI(true);
+                
+            } catch (error) {
+                console.error('Connection failed:', error);
+                alert('Connection failed: ' + error.message);
+            }
+        }
+        
+        function onDisconnected() {
+            updateConnectionUI(false);
+            device = null;
+            stateChar = null;
+            sensorChar = null;
+            commandChar = null;
+        }
+
+        function onSensorChanged(event) {
+            decodeSensor(event.target.value);
+        }
+        
+        function updateConnectionUI(connected) {
+            const indicator = document.getElementById('statusIndicator');
+            const text = document.getElementById('statusText');
+            const btn = document.getElementById('connectBtn');
+            
+            if (connected) {
+                indicator.classList.add('connected');
+                text.textContent = 'Connected';
+                btn.textContent = 'Disconnect';
+            } else {
+                indicator.classList.remove('connected');
+                text.textContent = 'Disconnected';
+                btn.textContent = 'Connect';
+            }
+        }
+        
+        function onStateChanged(event) {
+            decodeState(event.target.value);
+        }
+        
+        function decodeState(dataView) {
+            const bytes = new Uint8Array(dataView.buffer);
+
+            // Decode state
+            const isAuto = bytes[0] === 1;
+            const zoneMask = bytes[1];
+            const saloon_share = bytes[2];    // Saloon: % of total
+            const berth_share = bytes[3];     // Berth: % of downstream split
+            const priorityIdx = bytes[4];
+
+            console.log(`📥 BLE RX: saloon_share=${saloon_share}%, berth_share=${berth_share}%`);
+
+            // Store berth_share for ratio recovery when both Galley/Berth at 0%
+            lastBerthShare = berth_share;
+
+            // Update mode
+            currentMode = isAuto ? 'AUTO' : 'MANUAL';
+            updateModeUI();
+
+            // Update zone enabled states
+            for (let i = 0; i < 3; i++) {
+                zoneEnabled[i] = (zoneMask & (1 << i)) !== 0;
+                updateZoneUI(i);
+            }
+
+            // Update bar shares from device state
+            // Only update if: NOT dragging AND NOT in cooldown period after drag
+            const now = Date.now();
+            if (draggingBarIndex === null && now > ignoreBleDateUntil) {
+                // Convert model values to display percentages (matches nRF UIX_4th.py:1052-1072)
+                const saloon_en = zoneEnabled[0];
+                const galley_en = zoneEnabled[1];
+                const berth_en = zoneEnabled[2];
+
+                const downstream = 100 - saloon_share;
+                barShares[0] = saloon_share;  // Saloon absolute %
+
+                // Calculate Galley and Berth based on enabled zones
+                if (galley_en && berth_en) {
+                    // 3 zones: use berth_share to split downstream
+                    barShares[1] = downstream * (100 - berth_share) / 100;  // Galley
+                    barShares[2] = downstream * berth_share / 100;  // Berth
+                } else if (galley_en) {
+                    // Only Galley enabled: gets all downstream
+                    barShares[1] = downstream;
+                    barShares[2] = 0;
+                } else if (berth_en) {
+                    // Only Berth enabled: gets all downstream
+                    barShares[1] = 0;
+                    barShares[2] = downstream;
+                } else {
+                    // Neither enabled
+                    barShares[1] = 0;
+                    barShares[2] = 0;
+                }
+
+                // Apply priority override (matches nRF UIX_4th.py:1074-1079)
+                const isAuto = currentMode === 'AUTO';
+                const priority_idx = priorityIdx > 0 ? priorityIdx - 1 : null;
+
+                if (isAuto && priority_idx !== null) {
+                    // In AUTO with priority: override bars to show 100% for priority zone
+                    for (let i = 0; i < 3; i++) {
+                        if (i === priority_idx) {
+                            barShares[i] = 100;  // Priority zone gets 100%
+                        } else {
+                            barShares[i] = 0;    // Others get 0%
+                        }
+                    }
+                    console.log(`   📊 Bars (PRIORITY ${ZONE_NAMES[priority_idx]}): S=${barShares[0].toFixed(1)}%, G=${barShares[1].toFixed(1)}%, B=${barShares[2].toFixed(1)}%`);
+                } else {
+                    console.log(`   📊 Bars: S=${barShares[0].toFixed(1)}%, G=${barShares[1].toFixed(1)}%, B=${barShares[2].toFixed(1)}%`);
+                }
+
+                updateBarVisuals();
+            } else {
+                console.log(`   ⏸️ Ignoring BLE update (dragging=${draggingBarIndex}, cooldown=${now < ignoreBleDateUntil})`);
+            }
+
+            // Update priority
+            currentPriority = priorityIdx > 0 ? priorityIdx - 1 : null;
+            updatePriorityUI();
+        }
+
+        function decodeSensor(dataView) {
+            const bytes = new Uint8Array(dataView.buffer);
+
+            // Decode 3 zones (18 bytes total, 6 bytes each)
+            for (let i = 0; i < 3; i++) {
+                const offset = i * 6;
+
+                // Temperature: int16 little-endian, divide by 10
+                const tempRaw = new Int16Array(bytes.buffer, offset, 1)[0];
+                const temp = tempRaw === 32767 ? '--' : (tempRaw / 10.0).toFixed(1);
+
+                // Humidity
+                const humidity = bytes[offset + 2];
+                const hum = humidity === 255 ? '--' : humidity.toFixed(0);
+
+                // Update UI
+                const zoneName = ZONE_NAMES[i];
+                document.getElementById(`temp${zoneName}`).textContent = `${temp}°C`;
+                document.getElementById(`hum${zoneName}`).textContent = `${hum}% RH`;
+            }
+        }
+
+        function updateModeUI() {
+            const isAuto = currentMode === 'AUTO';
+            document.getElementById('autoBtn').classList.toggle('active', isAuto);
+            document.getElementById('manualBtn').classList.toggle('active', !isAuto);
+
+            // Enable/disable priority buttons based on mode
+            const priorityButtons = [
+                document.getElementById('prioSaloon'),
+                document.getElementById('prioGalley'),
+                document.getElementById('prioBerth')
+            ];
+            priorityButtons.forEach(btn => {
+                btn.disabled = !isAuto;
+            });
+
+            // Update airflow bars title
+            const title = document.getElementById('airflowTitle');
+            if (isAuto) {
+                title.textContent = 'Airflow Distribution (Auto)';
+                title.style.color = '#888';
+            } else {
+                title.textContent = 'Airflow Distribution (Drag to Adjust)';
+                title.style.color = '#00aaff';
+            }
+
+            // Update bars cursor style
+            const bars = document.querySelectorAll('.airflow-bar');
+            bars.forEach(bar => {
+                if (isAuto) {
+                    bar.style.cursor = 'default';
+                } else {
+                    bar.style.cursor = 'ns-resize';
+                }
+            });
+        }
+        
+        function updateZoneUI(idx) {
+            const card = document.getElementById(`zone${ZONE_NAMES[idx]}`);
+            const btn = card.querySelector('.zone-toggle');
+
+            card.className = 'zone-card';
+            if (currentPriority === idx) {
+                card.classList.add('priority');
+            } else if (zoneEnabled[idx]) {
+                card.classList.add('enabled');
+            } else {
+                card.classList.add('disabled');
+            }
+
+            btn.className = 'zone-toggle';
+            btn.classList.add(zoneEnabled[idx] ? 'enabled' : 'disabled');
+            btn.textContent = zoneEnabled[idx] ? 'ON' : 'OFF';
+
+            // Redistribute bar shares when zone enabled state changes
+            redistributeBarShares();
+        }
+
+        function redistributeBarShares() {
+            // Get enabled zones
+            const enabledIndices = [];
+            for (let i = 0; i < 3; i++) {
+                if (zoneEnabled[i]) {
+                    enabledIndices.push(i);
+                }
+            }
+
+            if (enabledIndices.length === 0) return;  // Safety check
+
+            // Calculate total of enabled zones
+            let enabledTotal = 0;
+            for (const i of enabledIndices) {
+                enabledTotal += barShares[i];
+            }
+
+            // Normalize enabled zones to sum to 100%
+            if (enabledTotal > 0) {
+                const scale = 100 / enabledTotal;
+                for (const i of enabledIndices) {
+                    barShares[i] *= scale;
+                }
+            } else {
+                // Equal distribution if all shares were 0
+                const equalShare = 100 / enabledIndices.length;
+                for (const i of enabledIndices) {
+                    barShares[i] = equalShare;
+                }
+            }
+
+            // Set disabled zones to 0
+            for (let i = 0; i < 3; i++) {
+                if (!zoneEnabled[i]) {
+                    barShares[i] = 0;
+                }
+            }
+
+            updateBarVisuals();
+        }
+        
+        function updatePriorityUI() {
+            for (let i = 0; i < 3; i++) {
+                const btn = document.getElementById(`prio${ZONE_NAMES[i]}`);
+                btn.classList.toggle('active', currentPriority === i);
+                updateZoneUI(i);
+            }
+            // Update bar colors (priority bar is orange)
+            updateBarVisuals();
+        }
+        
+        async function sendCommand(opcode, ...params) {
+            if (!commandChar) return;
+            try {
+                const cmd = new Uint8Array([opcode, ...params]);
+                await commandChar.writeValue(cmd);
+            } catch (error) {
+                console.error('Send failed:', error);
+            }
+        }
+        
+        function setMode(isAuto) {
+            sendCommand(OP_SET_MODE, isAuto ? 1 : 0);
+        }
+        
+        function toggleZone(idx) {
+            sendCommand(OP_SET_ZONE_ENABLED, idx, zoneEnabled[idx] ? 0 : 1);
+        }
+
+        function setPriority(idx) {
+            if (currentPriority === idx) {
+                clearPriority();
+            } else {
+                sendCommand(OP_START_PRIORITY, idx);
+            }
+        }
+        
+        function clearPriority() {
+            sendCommand(OP_CLEAR_PRIORITY);
+        }
+
+        // ===== AIRFLOW BAR DRAGGING =====
+
+        let barShares = [33, 34, 33];  // [Saloon, Galley, Berth]
+        let draggingBarIndex = null;
+        let dragStartY = null;
+        let dragStartShares = null;
+        let barsWrapperHeight = 0;
+        let ignoreBleDateUntil = 0;  // Timestamp - ignore BLE updates until this time
+
+        function initAirflowBars() {
+            const wrapper = document.getElementById('barsWrapper');
+            if (!wrapper) return;
+
+            barsWrapperHeight = wrapper.clientHeight - 30;  // Account for padding
+
+            // Touch events on wrapper (start)
+            wrapper.addEventListener('touchstart', onBarDragStart, { passive: false });
+
+            // Touch events on document (move/end) - prevents losing drag when leaving bars
+            document.addEventListener('touchmove', onBarDragMove, { passive: false });
+            document.addEventListener('touchend', onBarDragEnd);
+            document.addEventListener('touchcancel', onBarDragEnd);
+
+            // Mouse events
+            wrapper.addEventListener('mousedown', onBarDragStart);
+
+            // Mouse move/up on document - prevents losing drag when cursor leaves bars
+            document.addEventListener('mousemove', onBarDragMove);
+            document.addEventListener('mouseup', onBarDragEnd);
+        }
+
+        function onBarDragStart(e) {
+            // Don't allow dragging in AUTO mode
+            if (currentMode === 'AUTO') return;
+
+            e.preventDefault();
+
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+            const target = e.target.closest('.airflow-bar');
+
+            if (!target) return;
+
+            // Determine which bar was clicked
+            const barId = target.id;
+            if (barId === 'barSaloon') draggingBarIndex = 0;
+            else if (barId === 'barGalley') draggingBarIndex = 1;
+            else if (barId === 'barBerth') draggingBarIndex = 2;
+            else return;
+
+            // Check if zone is enabled
+            if (!zoneEnabled[draggingBarIndex]) return;
+
+            dragStartY = clientY;
+            dragStartShares = [...barShares];
+            target.classList.add('dragging');
+        }
+
+        function onBarDragMove(e) {
+            if (draggingBarIndex === null) return;
+            e.preventDefault();
+
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+            const deltaY = dragStartY - clientY;  // Positive = dragging up
+
+            // Reduce sensitivity for better mouse control (touch uses full sensitivity)
+            const sensitivity = e.touches ? 1.0 : 0.6;  // 60% sensitivity for mouse
+            const deltaPercent = (deltaY / barsWrapperHeight) * 100 * sensitivity;
+
+            // Calculate new share for dragged bar
+            let newShare = dragStartShares[draggingBarIndex] + deltaPercent;
+
+            // Get enabled zones
+            const saloon_en = zoneEnabled[0];
+            const galley_en = zoneEnabled[1];
+            const berth_en = zoneEnabled[2];
+            const enabledCount = zoneEnabled.filter(e => e).length;
+
+            // Apply zone-specific clamping BEFORE setting the value
+            if (draggingBarIndex === 0) {
+                // Saloon: can be 0-100%
+                newShare = Math.max(0, Math.min(100, newShare));
+            } else if (draggingBarIndex === 1 || draggingBarIndex === 2) {
+                // Galley or Berth
+                if (saloon_en && galley_en && berth_en) {
+                    // 3 zones enabled: Galley/Berth limited by downstream
+                    const downstream = 100 - dragStartShares[0];  // Saloon stays constant
+                    const maxAvailable = downstream;  // Can go to 0% (other zone gets remainder)
+                    const clamped = Math.max(0, Math.min(maxAvailable, newShare));
+                    if (clamped !== newShare) {
+                        console.log(`   ⚠️ Clamping ${ZONE_NAMES[draggingBarIndex]}: ${newShare.toFixed(1)}% → ${clamped.toFixed(1)}% (max downstream: ${downstream.toFixed(1)}%)`);
+                    }
+                    newShare = clamped;
+                } else {
+                    // Only 2 zones: can affect Saloon, allow 0-100%
+                    newShare = Math.max(0, Math.min(100, newShare));
+                }
+            }
+
+            const oldShare = dragStartShares[draggingBarIndex];
+            const shareDiff = newShare - oldShare;
+
+            // Start with original shares
+            barShares = [...dragStartShares];
+            barShares[draggingBarIndex] = newShare;
+
+            // Apply adjustment logic based on which bar is being dragged
+            if (draggingBarIndex === 0) {
+                // SALOON: affects Galley and Berth proportionally
+                const otherIndices = [];
+                if (zoneEnabled[1]) otherIndices.push(1);  // Galley
+                if (zoneEnabled[2]) otherIndices.push(2);  // Berth
+
+                if (otherIndices.length > 0) {
+                    const totalOther = otherIndices.reduce((sum, i) => sum + dragStartShares[i], 0);
+                    const remainingShare = 100 - newShare;
+
+                    if (totalOther > 0) {
+                        // Distribute proportionally based on current shares
+                        for (const i of otherIndices) {
+                            const ratio = dragStartShares[i] / totalOther;
+                            barShares[i] = remainingShare * ratio;
+                        }
+                    } else {
+                        // Both were 0, use last known berth_share ratio (matches nRF behavior)
+                        const galley_pct = remainingShare * (100 - lastBerthShare) / 100;
+                        const berth_pct = remainingShare * lastBerthShare / 100;
+                        barShares[1] = galley_pct;  // Galley
+                        barShares[2] = berth_pct;   // Berth
+                        console.log(`   📐 Recovering from 0%: using lastBerthShare=${lastBerthShare}%`);
+                    }
+                }
+
+                console.log(`   🔧 Saloon drag: S=${barShares[0].toFixed(1)}%, G=${barShares[1].toFixed(1)}%, B=${barShares[2].toFixed(1)}%`);
+
+            } else if (draggingBarIndex === 1) {
+                // GALLEY: only affects Berth (Saloon MUST stay constant with 3 zones)
+                const galley_en = zoneEnabled[1];
+                const berth_en = zoneEnabled[2];
+                const saloon_en = zoneEnabled[0];
+
+                if (saloon_en && galley_en && berth_en) {
+                    // 3 zones: Saloon stays constant, adjust Galley/Berth split
+                    barShares[2] = 100 - barShares[0] - barShares[1];
+                    barShares[2] = Math.max(0, Math.min(100, barShares[2]));
+                } else if (!berth_en) {
+                    // Only Saloon + Galley: affect Saloon
+                    barShares[0] = 100 - barShares[1];
+                    barShares[0] = Math.max(0, Math.min(100, barShares[0]));
+                }
+
+                console.log(`   🔧 Galley drag: S=${barShares[0].toFixed(1)}%, G=${barShares[1].toFixed(1)}%, B=${barShares[2].toFixed(1)}%`);
+
+            } else if (draggingBarIndex === 2) {
+                // BERTH: only affects Galley (Saloon MUST stay constant with 3 zones)
+                const galley_en = zoneEnabled[1];
+                const berth_en = zoneEnabled[2];
+                const saloon_en = zoneEnabled[0];
+
+                if (saloon_en && galley_en && berth_en) {
+                    // 3 zones: Saloon stays constant, adjust Galley/Berth split
+                    barShares[1] = 100 - barShares[0] - barShares[2];
+                    barShares[1] = Math.max(0, Math.min(100, barShares[1]));
+                } else if (!galley_en) {
+                    // Only Saloon + Berth: affect Saloon
+                    barShares[0] = 100 - barShares[2];
+                    barShares[0] = Math.max(0, Math.min(100, barShares[0]));
+                }
+
+                console.log(`   🔧 Berth drag: S=${barShares[0].toFixed(1)}%, G=${barShares[1].toFixed(1)}%, B=${barShares[2].toFixed(1)}%`);
+            }
+
+            updateBarVisuals();
+        }
+
+        async function onBarDragEnd(e) {
+            if (draggingBarIndex === null) return;
+
+            const bars = document.querySelectorAll('.airflow-bar');
+            bars.forEach(bar => bar.classList.remove('dragging'));
+
+            console.log(`🎯 Drag ended: S=${barShares[0].toFixed(1)}%, G=${barShares[1].toFixed(1)}%, B=${barShares[2].toFixed(1)}%`);
+
+            // Convert display percentages to model values
+            const saloon_share = Math.round(barShares[0]);  // Saloon: absolute %
+            const downstream = 100 - saloon_share;
+
+            // Berth share: % of downstream flow going to Berth
+            const berth_share = downstream > 0 ? Math.round((barShares[2] / downstream) * 100) : 50;
+
+            // Determine what to send based on which bar was dragged and zone config
+            const saloon_en = zoneEnabled[0];
+            const galley_en = zoneEnabled[1];
+            const berth_en = zoneEnabled[2];
+
+            if (draggingBarIndex === 0) {
+                // Dragged Saloon - send saloon_share only
+                console.log(`📤 BLE TX: saloon_share=${saloon_share}%`);
+                await sendCommand(OP_SET_SHARE, 0, saloon_share);
+
+            } else if (draggingBarIndex === 1 && galley_en && !berth_en) {
+                // Dragged Galley with only 2 zones (Berth disabled)
+                // Send: saloon = 100 - galley, berth = 0
+                const galley_pct = Math.round(barShares[1]);
+                const new_saloon = 100 - galley_pct;
+                console.log(`📤 BLE TX (2-zone): saloon_share=${new_saloon}%, berth_share=0%`);
+                await sendCommand(OP_SET_SHARE, 0, new_saloon);
+                await sendCommand(OP_SET_SHARE, 1, 0);
+
+            } else if (draggingBarIndex === 2 && berth_en && !galley_en) {
+                // Dragged Berth with only 2 zones (Galley disabled)
+                // Send: saloon = 100 - berth, berth = 100
+                const berth_pct = Math.round(barShares[2]);
+                const new_saloon = 100 - berth_pct;
+                console.log(`📤 BLE TX (2-zone): saloon_share=${new_saloon}%, berth_share=100%`);
+                await sendCommand(OP_SET_SHARE, 0, new_saloon);
+                await sendCommand(OP_SET_SHARE, 1, 100);
+
+            } else {
+                // Dragged Galley or Berth with 3 zones - only send berth_share
+                console.log(`📤 BLE TX: berth_share=${berth_share}%`);
+                await sendCommand(OP_SET_SHARE, 1, berth_share);
+            }
+
+            // Ignore BLE updates for 1200ms - trust our dragged values
+            // Device needs time to process command and send updated state
+            ignoreBleDateUntil = Date.now() + 1200;
+
+            draggingBarIndex = null;
+            dragStartY = null;
+            dragStartShares = null;
+        }
+
+        function updateBarVisuals() {
+            for (let i = 0; i < 3; i++) {
+                const zoneName = ZONE_NAMES[i];
+                const bar = document.getElementById(`bar${zoneName}`);
+                const value = document.getElementById(`value${zoneName}`);
+
+                const percent = Math.round(barShares[i]);
+                bar.style.height = `${percent}%`;
+                value.textContent = `${percent}%`;
+
+                // Handle disabled state
+                if (!zoneEnabled[i]) {
+                    bar.classList.add('disabled');
+                    value.classList.add('disabled');
+                } else {
+                    bar.classList.remove('disabled');
+                    value.classList.remove('disabled');
+                }
+
+                // Handle priority state (orange bar in AUTO mode)
+                const isPriority = currentMode === 'AUTO' && currentPriority === i;
+                bar.classList.toggle('priority', isPriority);
+            }
+        }
+
+        // Initialize when page loads
+        window.addEventListener('load', initAirflowBars);
+
+        // Register service worker for PWA
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('./sw.js', { scope: './' });
+        }
+    </script>
+</body>
+</html>

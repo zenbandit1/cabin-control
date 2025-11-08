@@ -149,31 +149,52 @@
             margin: 10px 0;
         }
         
+        .zone-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 12px;
+        }
+
         .zone-humidity {
             font-size: 14px;
             color: #888;
         }
 
-        .zone-meta {
+        .zone-icons {
             display: flex;
-            justify-content: space-between;
-            margin-top: 6px;
-            font-size: 12px;
-            color: #aaa;
+            flex-direction: column;
+            gap: 8px;
+            align-items: flex-end;
+            min-width: 70px;
         }
 
-        .zone-meta span {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
+        .zone-readings {
+            flex: 1;
         }
 
         .zone-icon {
+            display: block;
+            width: 100%;
+        }
+
+        .icon-row {
+            display: flex;
             align-items: center;
+            justify-content: flex-end;
+            gap: 6px;
+            min-width: 68px;
         }
 
         .zone-icon svg {
             display: block;
+        }
+
+        .zone-icon .icon-label {
+            font-size: 11px;
+            color: #ccc;
+            min-width: 34px;
+            text-align: right;
         }
 
         .battery-svg {
@@ -190,6 +211,10 @@
         .battery-fill {
             height: 8px;
             fill: transparent;
+        }
+
+        .battery-cap {
+            fill: #666666;
         }
 
         .battery-fill.high {
@@ -225,8 +250,6 @@
         .icon-label {
             font-size: 11px;
             color: #ccc;
-            min-width: 32px;
-            text-align: right;
         }
         
         .zone-toggle {
@@ -393,11 +416,15 @@
         <div class="zone-grid">
             <div class="zone-card enabled" id="zoneSaloon">
                 <div class="zone-header">Saloon</div>
-                <div class="zone-temp" id="tempSaloon">--°C</div>
-                <div class="zone-humidity" id="humSaloon">--% RH</div>
-                <div class="zone-meta">
-                    <span class="zone-battery zone-icon" id="batterySaloon" aria-label="Saloon battery"></span>
-                    <span class="zone-signal zone-icon" id="signalSaloon" aria-label="Saloon signal"></span>
+                <div class="zone-top">
+                    <div class="zone-readings">
+                        <div class="zone-temp" id="tempSaloon">--°C</div>
+                        <div class="zone-humidity" id="humSaloon">--% RH</div>
+                    </div>
+                    <div class="zone-icons">
+                        <span class="zone-signal zone-icon" id="signalSaloon" aria-label="Saloon signal"></span>
+                        <span class="zone-battery zone-icon" id="batterySaloon" aria-label="Saloon battery"></span>
+                    </div>
                 </div>
                 <button class="zone-toggle enabled" onclick="toggleZone(0)">ON</button>
                 <button class="zone-priority-btn" id="prioSaloon" onclick="setPriority(0)" disabled>
@@ -407,11 +434,15 @@
             </div>
             <div class="zone-card enabled" id="zoneGalley">
                 <div class="zone-header">Galley</div>
-                <div class="zone-temp" id="tempGalley">--°C</div>
-                <div class="zone-humidity" id="humGalley">--% RH</div>
-                <div class="zone-meta">
-                    <span class="zone-battery zone-icon" id="batteryGalley" aria-label="Galley battery"></span>
-                    <span class="zone-signal zone-icon" id="signalGalley" aria-label="Galley signal"></span>
+                <div class="zone-top">
+                    <div class="zone-readings">
+                        <div class="zone-temp" id="tempGalley">--°C</div>
+                        <div class="zone-humidity" id="humGalley">--% RH</div>
+                    </div>
+                    <div class="zone-icons">
+                        <span class="zone-signal zone-icon" id="signalGalley" aria-label="Galley signal"></span>
+                        <span class="zone-battery zone-icon" id="batteryGalley" aria-label="Galley battery"></span>
+                    </div>
                 </div>
                 <button class="zone-toggle enabled" onclick="toggleZone(1)">ON</button>
                 <button class="zone-priority-btn" id="prioGalley" onclick="setPriority(1)" disabled>
@@ -421,11 +452,15 @@
             </div>
             <div class="zone-card enabled" id="zoneBerth">
                 <div class="zone-header">Berth</div>
-                <div class="zone-temp" id="tempBerth">--°C</div>
-                <div class="zone-humidity" id="humBerth">--% RH</div>
-                <div class="zone-meta">
-                    <span class="zone-battery zone-icon" id="batteryBerth" aria-label="Berth battery"></span>
-                    <span class="zone-signal zone-icon" id="signalBerth" aria-label="Berth signal"></span>
+                <div class="zone-top">
+                    <div class="zone-readings">
+                        <div class="zone-temp" id="tempBerth">--°C</div>
+                        <div class="zone-humidity" id="humBerth">--% RH</div>
+                    </div>
+                    <div class="zone-icons">
+                        <span class="zone-signal zone-icon" id="signalBerth" aria-label="Berth signal"></span>
+                        <span class="zone-battery zone-icon" id="batteryBerth" aria-label="Berth battery"></span>
+                    </div>
                 </div>
                 <button class="zone-toggle enabled" onclick="toggleZone(2)">ON</button>
                 <button class="zone-priority-btn" id="prioBerth" onclick="setPriority(2)" disabled>
@@ -528,11 +563,14 @@
             const aria = pct === null ? 'Battery: no data' : `Battery level: ${label}`;
 
             return `
-                <svg viewBox="0 0 22 12" class="battery-svg" role="img" aria-label="${aria}">
-                    <rect class="battery-shell" x="1" y="2" width="18" height="8" rx="1" ry="1"></rect>
-                    <rect class="battery-fill ${levelClass}" x="1" y="2" width="${width}" height="8"></rect>
-                </svg>
-                <span class="icon-label">${label}</span>
+                <div class="icon-row">
+                    <svg viewBox="0 0 24 12" class="battery-svg" role="img" aria-label="${aria}">
+                        <rect class="battery-shell" x="1" y="2" width="18" height="8" rx="1" ry="1"></rect>
+                        <rect class="battery-fill ${levelClass}" x="1" y="2" width="${width}" height="8"></rect>
+                        <rect class="battery-cap" x="20.5" y="4" width="2.5" height="4" rx="1" ry="1"></rect>
+                    </svg>
+                    <span class="icon-label">${label}</span>
+                </div>
             `;
         }
 
@@ -550,10 +588,12 @@
             const label = bars === null ? '--/5' : `${bars}/5`;
             const aria = bars === null ? 'Signal: no data' : `Signal strength: ${bars} bars`;
             return `
-                <svg viewBox="0 0 18 12" class="signal-svg" role="img" aria-label="${aria}">
-                    ${svgBars}
-                </svg>
-                <span class="icon-label">${label}</span>
+                <div class="icon-row">
+                    <svg viewBox="0 0 18 12" class="signal-svg" role="img" aria-label="${aria}">
+                        ${svgBars}
+                    </svg>
+                    <span class="icon-label">${label}</span>
+                </div>
             `;
         }
         

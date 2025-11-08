@@ -7,7 +7,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#1a1a1a">
     <title>Cabin Control</title>
-    <link rel="manifest" href="./manifest.json">
+    <link rel="manifest" href="manifest.json">
     <style>
         * {
             margin: 0;
@@ -152,6 +152,20 @@
         .zone-humidity {
             font-size: 14px;
             color: #888;
+        }
+
+        .zone-meta {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 6px;
+            font-size: 12px;
+            color: #aaa;
+        }
+
+        .zone-meta span {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
         }
         
         .zone-toggle {
@@ -320,6 +334,10 @@
                 <div class="zone-header">Saloon</div>
                 <div class="zone-temp" id="tempSaloon">--°C</div>
                 <div class="zone-humidity" id="humSaloon">--% RH</div>
+                <div class="zone-meta">
+                    <span class="zone-battery" id="batterySaloon">Battery: --%</span>
+                    <span class="zone-signal" id="signalSaloon">Signal: --</span>
+                </div>
                 <button class="zone-toggle enabled" onclick="toggleZone(0)">ON</button>
                 <button class="zone-priority-btn" id="prioSaloon" onclick="setPriority(0)" disabled>
                     Set Priority
@@ -330,6 +348,10 @@
                 <div class="zone-header">Galley</div>
                 <div class="zone-temp" id="tempGalley">--°C</div>
                 <div class="zone-humidity" id="humGalley">--% RH</div>
+                <div class="zone-meta">
+                    <span class="zone-battery" id="batteryGalley">Battery: --%</span>
+                    <span class="zone-signal" id="signalGalley">Signal: --</span>
+                </div>
                 <button class="zone-toggle enabled" onclick="toggleZone(1)">ON</button>
                 <button class="zone-priority-btn" id="prioGalley" onclick="setPriority(1)" disabled>
                     Set Priority
@@ -340,6 +362,10 @@
                 <div class="zone-header">Berth</div>
                 <div class="zone-temp" id="tempBerth">--°C</div>
                 <div class="zone-humidity" id="humBerth">--% RH</div>
+                <div class="zone-meta">
+                    <span class="zone-battery" id="batteryBerth">Battery: --%</span>
+                    <span class="zone-signal" id="signalBerth">Signal: --</span>
+                </div>
                 <button class="zone-toggle enabled" onclick="toggleZone(2)">ON</button>
                 <button class="zone-priority-btn" id="prioBerth" onclick="setPriority(2)" disabled>
                     Set Priority
@@ -574,10 +600,24 @@
                 const humidity = bytes[offset + 2];
                 const hum = humidity === 255 ? '--' : humidity.toFixed(0);
 
+                // Battery level
+                const battery = bytes[offset + 3];
+                const batt = battery === 255 ? '--' : battery.toFixed(0);
+
+                // Signal strength (0-5 bars)
+                const signal = bytes[offset + 4];
+                const signalBars = signal === 255 ? '--' : `${Math.max(0, Math.min(5, signal))}/5`;
+
                 // Update UI
                 const zoneName = ZONE_NAMES[i];
                 document.getElementById(`temp${zoneName}`).textContent = `${temp}°C`;
                 document.getElementById(`hum${zoneName}`).textContent = `${hum}% RH`;
+                document.getElementById(`battery${zoneName}`).textContent = batt === '--'
+                    ? 'Battery: --%'
+                    : `Battery: ${batt}%`;
+                document.getElementById(`signal${zoneName}`).textContent = signalBars === '--'
+                    ? 'Signal: --'
+                    : `Signal: ${signalBars}`;
             }
         }
 
@@ -981,7 +1021,7 @@
 
         // Register service worker for PWA
         if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('./sw.js', { scope: './' });
+            navigator.serviceWorker.register('sw.js');
         }
     </script>
 </body>

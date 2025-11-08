@@ -1,10 +1,8 @@
-// Service Worker for Cabin Control PWA (GitHub Pages-ready)
-const CACHE_NAME = 'cabin-control-v2';
+// Service Worker for Cabin Control PWA
+const CACHE_NAME = 'cabin-control-v1';
 const urlsToCache = [
-  './cabin_control_pwa.html',
-  './manifest.json',
-  './icon-192.png',
-  './icon-512.png'
+  '/index.html',
+  '/manifest.json'
 ];
 
 self.addEventListener('install', event => {
@@ -16,7 +14,8 @@ self.addEventListener('install', event => {
 
 self.addEventListener('fetch', event => {
   event.respondWith(
-    caches.match(event.request).then(response => response || fetch(event.request))
+    caches.match(event.request)
+      .then(response => response || fetch(event.request))
   );
 });
 

@@ -165,7 +165,68 @@
         .zone-meta span {
             display: inline-flex;
             align-items: center;
-            gap: 4px;
+            gap: 6px;
+        }
+
+        .zone-icon {
+            align-items: center;
+        }
+
+        .zone-icon svg {
+            display: block;
+        }
+
+        .battery-svg {
+            width: 32px;
+            height: 12px;
+        }
+
+        .battery-shell {
+            fill: none;
+            stroke: #666666;
+            stroke-width: 1.2;
+        }
+
+        .battery-fill {
+            height: 8px;
+            fill: transparent;
+        }
+
+        .battery-fill.high {
+            fill: #00aaff;
+        }
+
+        .battery-fill.medium {
+            fill: #ffaa00;
+        }
+
+        .battery-fill.low {
+            fill: #cc0000;
+        }
+
+        .battery-fill.unknown,
+        .battery-fill.empty {
+            fill: transparent;
+        }
+
+        .signal-svg {
+            width: 36px;
+            height: 12px;
+        }
+
+        .signal-bar {
+            fill: #444;
+        }
+
+        .signal-bar.active {
+            fill: #00aaff;
+        }
+
+        .icon-label {
+            font-size: 11px;
+            color: #ccc;
+            min-width: 32px;
+            text-align: right;
         }
         
         .zone-toggle {
@@ -335,8 +396,8 @@
                 <div class="zone-temp" id="tempSaloon">--°C</div>
                 <div class="zone-humidity" id="humSaloon">--% RH</div>
                 <div class="zone-meta">
-                    <span class="zone-battery" id="batterySaloon">Battery: --%</span>
-                    <span class="zone-signal" id="signalSaloon">Signal: --</span>
+                    <span class="zone-battery zone-icon" id="batterySaloon" aria-label="Saloon battery"></span>
+                    <span class="zone-signal zone-icon" id="signalSaloon" aria-label="Saloon signal"></span>
                 </div>
                 <button class="zone-toggle enabled" onclick="toggleZone(0)">ON</button>
                 <button class="zone-priority-btn" id="prioSaloon" onclick="setPriority(0)" disabled>
@@ -349,8 +410,8 @@
                 <div class="zone-temp" id="tempGalley">--°C</div>
                 <div class="zone-humidity" id="humGalley">--% RH</div>
                 <div class="zone-meta">
-                    <span class="zone-battery" id="batteryGalley">Battery: --%</span>
-                    <span class="zone-signal" id="signalGalley">Signal: --</span>
+                    <span class="zone-battery zone-icon" id="batteryGalley" aria-label="Galley battery"></span>
+                    <span class="zone-signal zone-icon" id="signalGalley" aria-label="Galley signal"></span>
                 </div>
                 <button class="zone-toggle enabled" onclick="toggleZone(1)">ON</button>
                 <button class="zone-priority-btn" id="prioGalley" onclick="setPriority(1)" disabled>
@@ -363,8 +424,8 @@
                 <div class="zone-temp" id="tempBerth">--°C</div>
                 <div class="zone-humidity" id="humBerth">--% RH</div>
                 <div class="zone-meta">
-                    <span class="zone-battery" id="batteryBerth">Battery: --%</span>
-                    <span class="zone-signal" id="signalBerth">Signal: --</span>
+                    <span class="zone-battery zone-icon" id="batteryBerth" aria-label="Berth battery"></span>
+                    <span class="zone-signal zone-icon" id="signalBerth" aria-label="Berth signal"></span>
                 </div>
                 <button class="zone-toggle enabled" onclick="toggleZone(2)">ON</button>
                 <button class="zone-priority-btn" id="prioBerth" onclick="setPriority(2)" disabled>
@@ -417,10 +478,84 @@
         
         // State
         const ZONE_NAMES = ['Saloon', 'Galley', 'Berth'];
+        const SIGNAL_BAR_HEIGHTS = [2, 4, 6, 8, 10];
+        const BATTERY_FILL_WIDTH = 18;
         let currentMode = 'AUTO';
         let currentPriority = null;
         let zoneEnabled = [true, true, true];
         let lastBerthShare = 50;  // Track last known berth_share for ratio recovery from 0%
+        
+        function clamp(value, min, max) {
+            return Math.min(max, Math.max(min, value));
+        }
+
+        function initializeZoneIndicators() {
+            ZONE_NAMES.forEach(name => updateZoneIndicators(name, null, null));
+        }
+
+        function updateZoneIndicators(zoneName, battPct, signalBars) {
+            const battEl = document.getElementById(`battery${zoneName}`);
+            if (battEl) {
+                battEl.innerHTML = renderBatteryIcon(battPct);
+            }
+
+            const sigEl = document.getElementById(`signal${zoneName}`);
+            if (sigEl) {
+                sigEl.innerHTML = renderSignalIcon(signalBars);
+            }
+        }
+
+        function renderBatteryIcon(level) {
+            const pct = typeof level === 'number' && !Number.isNaN(level)
+                ? clamp(level, 0, 100)
+                : null;
+            const width = pct === null ? 0 : ((BATTERY_FILL_WIDTH * pct) / 100).toFixed(1);
+
+            let levelClass = 'unknown';
+            if (pct === null) {
+                levelClass = 'unknown';
+            } else if (pct >= 70) {
+                levelClass = 'high';
+            } else if (pct >= 30) {
+                levelClass = 'medium';
+            } else if (pct > 0) {
+                levelClass = 'low';
+            } else {
+                levelClass = 'empty';
+            }
+
+            const label = pct === null ? '--%' : `${pct}%`;
+            const aria = pct === null ? 'Battery: no data' : `Battery level: ${label}`;
+
+            return `
+                <svg viewBox="0 0 22 12" class="battery-svg" role="img" aria-label="${aria}">
+                    <rect class="battery-shell" x="1" y="2" width="18" height="8" rx="1" ry="1"></rect>
+                    <rect class="battery-fill ${levelClass}" x="1" y="2" width="${width}" height="8"></rect>
+                </svg>
+                <span class="icon-label">${label}</span>
+            `;
+        }
+
+        function renderSignalIcon(level) {
+            const bars = typeof level === 'number' && !Number.isNaN(level)
+                ? clamp(Math.round(level), 0, 5)
+                : null;
+            let svgBars = '';
+            for (let i = 0; i < 5; i++) {
+                const h = SIGNAL_BAR_HEIGHTS[i];
+                const y = 11 - h;
+                const active = bars !== null && i < bars;
+                svgBars += `<rect class="signal-bar ${active ? 'active' : ''}" x="${1 + (i * 3)}" y="${y}" width="2" height="${h}"></rect>`;
+            }
+            const label = bars === null ? '--/5' : `${bars}/5`;
+            const aria = bars === null ? 'Signal: no data' : `Signal strength: ${bars} bars`;
+            return `
+                <svg viewBox="0 0 18 12" class="signal-svg" role="img" aria-label="${aria}">
+                    ${svgBars}
+                </svg>
+                <span class="icon-label">${label}</span>
+            `;
+        }
         
         // Check Web Bluetooth support
         if (!navigator.bluetooth) {
@@ -601,23 +736,18 @@
                 const hum = humidity === 255 ? '--' : humidity.toFixed(0);
 
                 // Battery level
-                const battery = bytes[offset + 3];
-                const batt = battery === 255 ? '--' : battery.toFixed(0);
+                const batteryRaw = bytes[offset + 3];
+                const battery = batteryRaw === 255 ? null : batteryRaw;
 
                 // Signal strength (0-5 bars)
-                const signal = bytes[offset + 4];
-                const signalBars = signal === 255 ? '--' : `${Math.max(0, Math.min(5, signal))}/5`;
+                const signalRaw = bytes[offset + 4];
+                const signalBars = signalRaw === 255 ? null : clamp(signalRaw, 0, 5);
 
                 // Update UI
                 const zoneName = ZONE_NAMES[i];
                 document.getElementById(`temp${zoneName}`).textContent = `${temp}°C`;
                 document.getElementById(`hum${zoneName}`).textContent = `${hum}% RH`;
-                document.getElementById(`battery${zoneName}`).textContent = batt === '--'
-                    ? 'Battery: --%'
-                    : `Battery: ${batt}%`;
-                document.getElementById(`signal${zoneName}`).textContent = signalBars === '--'
-                    ? 'Signal: --'
-                    : `Signal: ${signalBars}`;
+                updateZoneIndicators(zoneName, battery, signalBars);
             }
         }
 
@@ -1017,7 +1147,10 @@
         }
 
         // Initialize when page loads
-        window.addEventListener('load', initAirflowBars);
+        window.addEventListener('load', () => {
+            initAirflowBars();
+            initializeZoneIndicators();
+        });
 
         // Register service worker for PWA
         if ('serviceWorker' in navigator) {

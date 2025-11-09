@@ -1051,11 +1051,12 @@
                             const ratio = dragStartShares[i] / totalOther;
                             barShares[i] = remainingShare * ratio;
                         }
-                    
+
                     } else {
                         // Both were 0 at drag start
                         const galley_en = zoneEnabled[1];
                         const berth_en = zoneEnabled[2];
+
                         if (galley_en && berth_en) {
                             // Use last known berth_share ratio (matches nRF behavior)
                             const galley_pct = remainingShare * (100 - lastBerthShare) / 100;
@@ -1063,29 +1064,32 @@
                             barShares[1] = galley_pct;  // Galley
                             barShares[2] = berth_pct;   // Berth
                             console.log(`   📐 Recovering from 0%: using lastBerthShare=${lastBerthShare}%`);
+
                         } else if (berth_en && !galley_en) {
                             // Only Berth enabled downstream
                             barShares[1] = 0;
                             barShares[2] = remainingShare;
+
                         } else if (galley_en && !berth_en) {
                             // Only Galley enabled downstream
                             barShares[1] = remainingShare;
                             barShares[2] = 0;
+
                         } else {
                             // Neither enabled; nothing to allocate
                             barShares[1] = 0;
                             barShares[2] = 0;
                         }
                     }
-//%`);
-//#                    }
                 }
 
-                
                 // Ensure disabled downstream zones remain at 0 during drag
                 if (!zoneEnabled[1]) barShares[1] = 0;
                 if (!zoneEnabled[2]) barShares[2] = 0;
-console.log(`   🔧 Saloon drag: S=${barShares[0].toFixed(1)}%, G=${barShares[1].toFixed(1)}%, B=${barShares[2].toFixed(1)}%`);
+
+                console.log(`   🔧 Saloon drag: S=${barShares[0].toFixed(1)}%, G=${barShares[1].toFixed(1)}%, B=${barShares[2].toFixed(1)}%`);
+            
+
 
             } else if (draggingBarIndex === 1) {
                 // GALLEY: only affects Berth (Saloon MUST stay constant with 3 zones)

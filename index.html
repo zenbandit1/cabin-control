@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=0.65, user-scalable=yes">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#1a1a1a">
@@ -118,7 +118,7 @@
         .zone-card {
             background: #2a2a2a;
             border-radius: 12px;
-            padding: 15px;
+            padding: 12px;
             border: 2px solid #444;
             transition: all 0.2s;
         }
@@ -152,12 +152,20 @@
         }
 
         .zone-temp {
-            font-size: 36px;
+            font-size: 54px;
             font-weight: 700;
-            margin: 0 0 10px 0;
+            margin: -10px 0 10px 0;
             display: flex;
-            align-items: center;
+            align-items: baseline;
             gap: 2px;
+        }
+
+        .temp-main {
+            font-size: 1em;
+        }
+
+        .temp-decimal {
+            font-size: 0.6em;
         }
 
         .zone-top {
@@ -172,7 +180,7 @@
             display: flex;
             align-items: center;
             gap: 4px;
-            margin-top: -8px;
+            margin-top: -13px;
         }
 
         .temp-icon {
@@ -183,6 +191,8 @@
             justify-content: center;
             flex-shrink: 0;
             margin-left: -4px;
+            position: relative;
+            top: 5px;
         }
 
         .temp-icon svg {
@@ -443,8 +453,169 @@
             color: #666;
         }
 
+        .presets-container {
+            background: #2a2a2a;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        .presets-title {
+            text-align: center;
+            font-weight: 600;
+            margin-bottom: 15px;
+            color: #00aaff;
+            font-size: 18px;
+        }
+
+        .presets-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+            margin-bottom: 15px;
+        }
+
+        .preset-btn {
+            background: #1a1a1a;
+            border: 2px solid #00aaff;
+            border-radius: 8px;
+            padding: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+            color: white;
+            font-family: inherit;
+        }
+
+        .preset-btn:active {
+            background: #0d0d0d;
+            transform: scale(0.98);
+        }
+
+        .preset-btn.active {
+            border-color: #ffaa00;
+            background: linear-gradient(135deg, #1a1a1a 0%, #2a1a0a 100%);
+        }
+
+        .preset-name {
+            font-weight: 600;
+            font-size: 15px;
+            margin-bottom: 4px;
+            color: #00aaff;
+        }
+
+        .preset-btn.active .preset-name {
+            color: #ffaa00;
+        }
+
+        .preset-values {
+            font-size: 13px;
+            color: #888;
+            font-family: monospace;
+        }
+
+        .preset-save-btn {
+            width: 100%;
+            background: #2a2a2a;
+            border: 2px solid #00aaff;
+            border-radius: 8px;
+            padding: 12px;
+            cursor: pointer;
+            color: #00aaff;
+            font-weight: 600;
+            font-size: 15px;
+            font-family: inherit;
+            transition: all 0.2s;
+        }
+
+        .preset-save-btn:active {
+            background: #00aaff;
+            color: white;
+        }
+
+        .custom-presets-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+            margin-top: 15px;
+        }
+
+        .custom-preset-wrapper {
+            position: relative;
+        }
+
+        .custom-preset-btn {
+            background: #1a1a1a;
+            border: 2px solid #00aaff;
+            border-radius: 8px;
+            padding: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+            color: white;
+            font-family: inherit;
+            width: 100%;
+            text-align: center;
+        }
+
+        .custom-preset-btn:active {
+            background: #0d0d0d;
+            transform: scale(0.98);
+        }
+
+        .custom-preset-btn.active {
+            border-color: #ffaa00;
+            background: linear-gradient(135deg, #1a1a1a 0%, #2a1a0a 100%);
+        }
+
+        .custom-preset-btn .preset-name {
+            color: #00aaff;
+            font-weight: 600;
+            font-size: 15px;
+            margin-bottom: 4px;
+        }
+
+        .custom-preset-btn.active .preset-name {
+            color: #ffaa00;
+        }
+
+        .custom-preset-btn .preset-values {
+            font-size: 13px;
+            color: #888;
+            font-family: monospace;
+        }
+
+        .custom-preset-delete {
+            position: absolute;
+            top: 6px;
+            right: 6px;
+            background: #cc0000;
+            border: none;
+            border-radius: 50%;
+            color: white;
+            width: 28px;
+            height: 28px;
+            cursor: pointer;
+            font-size: 20px;
+            font-weight: bold;
+            line-height: 28px;
+            text-align: center;
+            transition: all 0.2s;
+            z-index: 10;
+            user-select: none;
+        }
+
+        .custom-preset-delete:active {
+            background: #aa0000;
+            transform: scale(0.95);
+        }
+
         @media (max-width: 360px) {
             .zone-grid {
+                grid-template-columns: 1fr;
+            }
+            .presets-grid {
+                grid-template-columns: 1fr;
+            }
+            .custom-presets-grid {
                 grid-template-columns: 1fr;
             }
         }
@@ -489,7 +660,7 @@
                                     <path class="thermo-range" d="M102,78 a18,18 0 0 1 18,-18 a18,18 0 0 1 18,18 v256 a72,72 0 1 1 -36,0 v-256"></path>
                                 </svg>
                             </span>
-                            <span id="tempSaloon">--°C</span>
+                            <span id="tempSaloon"><span class="temp-main">Wa</span><span class="temp-decimal">.it</span></span>
                         </div>
                         <div class="zone-humidity">
                             <span class="humidity-icon" aria-hidden="true">
@@ -497,7 +668,7 @@
                                     <path fill="currentColor" fill-rule="evenodd" clip-rule="evenodd" d="M40.95,0c7.88,33.66,17.45,35.4,33.8,60.69c4.25,6.57,7.22,13.56,7.22,21.58c0,11.14-4.02,20.69-12.07,28.65c-8.08,7.96-17.71,11.96-28.93,11.96c-11.19,0-20.8-4-28.88-11.96C4.03,102.96,0,93.41,0,82.27c0-8.06,3.02-15.1,7.31-21.71C23.69,35.33,33.22,33.55,40.95,0L40.95,0L40.95,0z M17.57,71.78c2.29-0.21,4.31,1.48,4.51,3.76c0.52,5.52,1.73,10.61,4.04,15c2.23,4.24,5.55,7.89,10.35,10.7c1.98,1.16,2.64,3.71,1.48,5.68c-1.16,1.98-3.71,2.64-5.68,1.48c-6.25-3.66-10.58-8.42-13.51-13.99c-2.95-5.61-4.36-11.85-4.95-18.12C13.6,74.02,15.3,71.99,17.57,71.78L17.57,71.78z"></path>
                                 </svg>
                             </span>
-                            <span id="humSaloon">--% RH</span>
+                            <span id="humSaloon">--% Humidity</span>
                         </div>
                     </div>
                 </div>
@@ -525,7 +696,7 @@
                                     <path class="thermo-range" d="M102,78 a18,18 0 0 1 18,-18 a18,18 0 0 1 18,18 v256 a72,72 0 1 1 -36,0 v-256"></path>
                                 </svg>
                             </span>
-                            <span id="tempGalley">--°C</span>
+                            <span id="tempGalley"><span class="temp-main">Wa</span><span class="temp-decimal">.it</span></span>
                         </div>
                         <div class="zone-humidity">
                             <span class="humidity-icon" aria-hidden="true">
@@ -533,7 +704,7 @@
                                     <path fill="currentColor" fill-rule="evenodd" clip-rule="evenodd" d="M40.95,0c7.88,33.66,17.45,35.4,33.8,60.69c4.25,6.57,7.22,13.56,7.22,21.58c0,11.14-4.02,20.69-12.07,28.65c-8.08,7.96-17.71,11.96-28.93,11.96c-11.19,0-20.8-4-28.88-11.96C4.03,102.96,0,93.41,0,82.27c0-8.06,3.02-15.1,7.31-21.71C23.69,35.33,33.22,33.55,40.95,0L40.95,0L40.95,0z M17.57,71.78c2.29-0.21,4.31,1.48,4.51,3.76c0.52,5.52,1.73,10.61,4.04,15c2.23,4.24,5.55,7.89,10.35,10.7c1.98,1.16,2.64,3.71,1.48,5.68c-1.16,1.98-3.71,2.64-5.68,1.48c-6.25-3.66-10.58-8.42-13.51-13.99c-2.95-5.61-4.36-11.85-4.95-18.12C13.6,74.02,15.3,71.99,17.57,71.78L17.57,71.78z"></path>
                                 </svg>
                             </span>
-                            <span id="humGalley">--% RH</span>
+                            <span id="humGalley">--% Humidity</span>
                         </div>
                     </div>
                 </div>
@@ -561,7 +732,7 @@
                                     <path class="thermo-range" d="M102,78 a18,18 0 0 1 18,-18 a18,18 0 0 1 18,18 v256 a72,72 0 1 1 -36,0 v-256"></path>
                                 </svg>
                             </span>
-                            <span id="tempBerth">--°C</span>
+                            <span id="tempBerth"><span class="temp-main">Wa</span><span class="temp-decimal">.it</span></span>
                         </div>
                         <div class="zone-humidity">
                             <span class="humidity-icon" aria-hidden="true">
@@ -569,7 +740,7 @@
                                     <path fill="currentColor" fill-rule="evenodd" clip-rule="evenodd" d="M40.95,0c7.88,33.66,17.45,35.4,33.8,60.69c4.25,6.57,7.22,13.56,7.22,21.58c0,11.14-4.02,20.69-12.07,28.65c-8.08,7.96-17.71,11.96-28.93,11.96c-11.19,0-20.8-4-28.88-11.96C4.03,102.96,0,93.41,0,82.27c0-8.06,3.02-15.1,7.31-21.71C23.69,35.33,33.22,33.55,40.95,0L40.95,0L40.95,0z M17.57,71.78c2.29-0.21,4.31,1.48,4.51,3.76c0.52,5.52,1.73,10.61,4.04,15c2.23,4.24,5.55,7.89,10.35,10.7c1.98,1.16,2.64,3.71,1.48,5.68c-1.16,1.98-3.71,2.64-5.68,1.48c-6.25-3.66-10.58-8.42-13.51-13.99c-2.95-5.61-4.36-11.85-4.95-18.12C13.6,74.02,15.3,71.99,17.57,71.78L17.57,71.78z"></path>
                                 </svg>
                             </span>
-                            <span id="humBerth">--% RH</span>
+                            <span id="humBerth">--% Humidity</span>
                         </div>
                     </div>
                 </div>
@@ -598,6 +769,37 @@
                     <div class="bar-label">Berth</div>
                 </div>
             </div>
+        </div>
+
+        <!-- Preset Buttons -->
+        <div class="presets-container">
+            <div class="presets-title">Quick Presets</div>
+            <div class="presets-grid">
+                <button class="preset-btn" data-preset="even" onclick="applyPreset('even')">
+                    <div class="preset-name">Even Split</div>
+                    <div class="preset-values">33 / 33 / 34</div>
+                </button>
+                <button class="preset-btn" data-preset="saloon" onclick="applyPreset('saloon')">
+                    <div class="preset-name">Saloon Focus</div>
+                    <div class="preset-values">65 / 25 / 10</div>
+                </button>
+                <button class="preset-btn" data-preset="sleep" onclick="applyPreset('sleep')">
+                    <div class="preset-name">Sleep Mode</div>
+                    <div class="preset-values">10 / 10 / 80</div>
+                </button>
+                <button class="preset-btn" data-preset="cooking" onclick="applyPreset('cooking')">
+                    <div class="preset-name">Cooking Mode</div>
+                    <div class="preset-values">20 / 70 / 10</div>
+                </button>
+                <button class="preset-btn" data-preset="allsaloon" onclick="applyPreset('allsaloon')">
+                    <div class="preset-name">All Saloon</div>
+                    <div class="preset-values">100 / 0 / 0</div>
+                </button>
+            </div>
+            <button class="preset-save-btn" onclick="saveCustomPreset()">
+                Save Current as Custom
+            </button>
+            <div id="customPresetsContainer"></div>
         </div>
 
     </div>
@@ -935,7 +1137,18 @@
                 // Temperature: int16 little-endian, divide by 10
                 const tempRaw = new Int16Array(bytes.buffer, offset, 1)[0];
                 const tempValue = tempRaw === 32767 ? null : (tempRaw / 10.0);
-                const tempDisplay = tempValue === null ? '--' : tempValue.toFixed(1);
+
+                // Format temperature with separate styling for main and decimal parts
+                let tempHTML;
+                if (tempValue === null) {
+                    tempHTML = '<span class="temp-main">Wa</span><span class="temp-decimal">.it</span>';
+                } else {
+                    const tempStr = tempValue.toFixed(1);
+                    const parts = tempStr.split('.');
+                    const mainPart = parts[0];
+                    const decimalPart = parts[1];
+                    tempHTML = `<span class="temp-main">${mainPart}</span><span class="temp-decimal">.${decimalPart}°C</span>`;
+                }
 
                 // Humidity
                 const humidity = bytes[offset + 2];
@@ -951,8 +1164,8 @@
 
                 // Update UI
                 const zoneName = ZONE_NAMES[i];
-                document.getElementById(`temp${zoneName}`).textContent = `${tempDisplay}°C`;
-                document.getElementById(`hum${zoneName}`).textContent = `${hum}% RH`;
+                document.getElementById(`temp${zoneName}`).innerHTML = tempHTML;
+                document.getElementById(`hum${zoneName}`).textContent = `${hum}% Humidity`;
                 updateZoneIndicators(zoneName, battery, signalBars);
                 updateThermometer(zoneName, tempValue);
             }
@@ -1278,6 +1491,9 @@
 
             console.log(`🎯 Drag ended: S=${barShares[0].toFixed(1)}%, G=${barShares[1].toFixed(1)}%, B=${barShares[2].toFixed(1)}%`);
 
+            // Clear active preset on manual adjustment
+            clearActivePreset();
+
             // Convert display percentages to model values
             const saloon_share = Math.round(barShares[0]);  // Saloon: absolute %
             const downstream = 100 - saloon_share;
@@ -1353,10 +1569,217 @@
             }
         }
 
+        // ===== PRESETS =====
+
+        // Preset configurations (Saloon, Galley, Berth percentages)
+        const PRESETS = {
+            even: [33, 33, 34],
+            saloon: [65, 25, 10],
+            sleep: [10, 10, 80],
+            cooking: [20, 70, 10],
+            allsaloon: [100, 0, 0]
+        };
+
+        let activePreset = null;  // Track which preset is currently active
+
+        async function applyPreset(presetId) {
+            // If already active, deactivate it
+            if (activePreset === presetId) {
+                clearActivePreset();
+                return;
+            }
+
+            // Get preset values
+            let values;
+            if (PRESETS[presetId]) {
+                values = PRESETS[presetId];
+            } else {
+                // Check if it's a custom preset
+                const customPresets = loadCustomPresets();
+                const custom = customPresets.find(p => p.id === presetId);
+                if (!custom) return;
+                values = custom.values;
+            }
+
+            // Only allow presets in MANUAL mode
+            if (currentMode !== 'MANUAL') {
+                console.log('⚠️ Presets only available in MANUAL mode');
+                return;
+            }
+
+            // Apply the preset values
+            barShares = [...values];
+            updateBarVisuals();
+
+            // Ignore BLE updates immediately - before sending commands
+            // This prevents the first command's state notification from overwriting bars
+            ignoreBleDateUntil = Date.now() + 1500;
+
+            // Convert display percentages to model values and send to device
+            // Use the same logic as onBarDragEnd to handle different zone configurations
+            const saloon_share = Math.round(barShares[0]);
+            const downstream = 100 - saloon_share;
+            const berth_share = downstream > 0 ? Math.round((barShares[2] / downstream) * 100) : 50;
+
+            console.log(`🎯 Applying preset "${presetId}": S=${barShares[0]}%, G=${barShares[1]}%, B=${barShares[2]}%`);
+
+            // Check zone configuration
+            const saloon_en = zoneEnabled[0];
+            const galley_en = zoneEnabled[1];
+            const berth_en = zoneEnabled[2];
+
+            // Send commands based on which zones are enabled (matches onBarDragEnd logic)
+            // IMPORTANT: Always send Saloon (servo 0) first, then Berth (servo 1) after delay
+            // This respects the physical airflow hierarchy: Saloon takes first, then downstream splits
+            if (saloon_en && galley_en && berth_en) {
+                // All 3 zones enabled: send both servo commands
+                console.log(`📤 BLE TX (3-zone): saloon_share=${saloon_share}%, berth_share=${berth_share}%`);
+                await sendCommand(OP_SET_SHARE, 0, saloon_share);
+                await new Promise(resolve => setTimeout(resolve, 250)); // 250ms delay
+                await sendCommand(OP_SET_SHARE, 1, berth_share);
+            } else if (saloon_en && galley_en && !berth_en) {
+                // Only Saloon + Galley: send saloon and berth=0
+                console.log(`📤 BLE TX (2-zone S+G): saloon_share=${saloon_share}%, berth_share=0%`);
+                await sendCommand(OP_SET_SHARE, 0, saloon_share);
+                await new Promise(resolve => setTimeout(resolve, 250)); // 250ms delay
+                await sendCommand(OP_SET_SHARE, 1, 0);
+            } else if (saloon_en && !galley_en && berth_en) {
+                // Only Saloon + Berth: send saloon and berth=100
+                console.log(`📤 BLE TX (2-zone S+B): saloon_share=${saloon_share}%, berth_share=100%`);
+                await sendCommand(OP_SET_SHARE, 0, saloon_share);
+                await new Promise(resolve => setTimeout(resolve, 250)); // 250ms delay
+                await sendCommand(OP_SET_SHARE, 1, 100);
+            } else if (!saloon_en && galley_en && berth_en) {
+                // Only Galley + Berth: send saloon=0 and berth_share
+                console.log(`📤 BLE TX (2-zone G+B): saloon_share=0%, berth_share=${berth_share}%`);
+                await sendCommand(OP_SET_SHARE, 0, 0);
+                await new Promise(resolve => setTimeout(resolve, 250)); // 250ms delay
+                await sendCommand(OP_SET_SHARE, 1, berth_share);
+            } else {
+                // Single zone or other config: just send both
+                console.log(`📤 BLE TX (default): saloon_share=${saloon_share}%, berth_share=${berth_share}%`);
+                await sendCommand(OP_SET_SHARE, 0, saloon_share);
+                await new Promise(resolve => setTimeout(resolve, 250)); // 250ms delay
+                await sendCommand(OP_SET_SHARE, 1, berth_share);
+            }
+
+            // Mark this preset as active
+            activePreset = presetId;
+            updatePresetUI();
+
+            // Ignore BLE updates for 1200ms
+            ignoreBleDateUntil = Date.now() + 1200;
+        }
+
+        function clearActivePreset() {
+            activePreset = null;
+            updatePresetUI();
+        }
+
+        function updatePresetUI() {
+            // Update all preset buttons
+            document.querySelectorAll('.preset-btn, .custom-preset-btn').forEach(btn => {
+                const presetId = btn.getAttribute('data-preset');
+                if (presetId === activePreset) {
+                    btn.classList.add('active');
+                } else {
+                    btn.classList.remove('active');
+                }
+            });
+        }
+
+        function saveCustomPreset() {
+            // Prompt for name
+            const name = prompt('Enter a name for this preset:');
+            if (!name || name.trim() === '') return;
+
+            // Get current bar shares
+            const values = [
+                Math.round(barShares[0]),
+                Math.round(barShares[1]),
+                Math.round(barShares[2])
+            ];
+
+            // Create preset object
+            const preset = {
+                id: 'custom_' + Date.now(),
+                name: name.trim(),
+                values: values
+            };
+
+            // Load existing presets
+            const customPresets = loadCustomPresets();
+            customPresets.push(preset);
+
+            // Save to localStorage
+            localStorage.setItem('customPresets', JSON.stringify(customPresets));
+
+            // Re-render custom presets
+            renderCustomPresets();
+
+            console.log(`💾 Saved custom preset: ${name} (${values.join('/')})`);
+        }
+
+        function loadCustomPresets() {
+            try {
+                const saved = localStorage.getItem('customPresets');
+                return saved ? JSON.parse(saved) : [];
+            } catch (e) {
+                console.error('Failed to load custom presets:', e);
+                return [];
+            }
+        }
+
+        function deleteCustomPreset(presetId) {
+            if (!confirm('Delete this custom preset?')) return;
+
+            // Load existing presets
+            let customPresets = loadCustomPresets();
+
+            // Remove the preset
+            customPresets = customPresets.filter(p => p.id !== presetId);
+
+            // Save back to localStorage
+            localStorage.setItem('customPresets', JSON.stringify(customPresets));
+
+            // Clear active if this was active
+            if (activePreset === presetId) {
+                clearActivePreset();
+            }
+
+            // Re-render
+            renderCustomPresets();
+
+            console.log(`🗑️ Deleted custom preset: ${presetId}`);
+        }
+
+        function renderCustomPresets() {
+            const container = document.getElementById('customPresetsContainer');
+            const customPresets = loadCustomPresets();
+
+            if (customPresets.length === 0) {
+                container.innerHTML = '';
+                return;
+            }
+
+            const buttons = customPresets.map(preset => `
+                <div class="custom-preset-wrapper">
+                    <button class="custom-preset-btn" data-preset="${preset.id}" onclick="applyPreset('${preset.id}')">
+                        <div class="preset-name">${preset.name}</div>
+                        <div class="preset-values">${preset.values.join(' / ')}</div>
+                    </button>
+                    <span class="custom-preset-delete" onclick="deleteCustomPreset('${preset.id}')">×</span>
+                </div>
+            `).join('');
+
+            container.innerHTML = `<div class="custom-presets-grid">${buttons}</div>`;
+        }
+
         // Initialize when page loads
         window.addEventListener('load', () => {
             initAirflowBars();
             initializeZoneIndicators();
+            renderCustomPresets();
         });
 
         // Register service worker for PWA

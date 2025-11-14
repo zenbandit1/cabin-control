@@ -1,203 +1,1922 @@
-#from UIX_1st import UIManager
-from UIX_4th import UIManager
-from thermobeacon_manager_nb import ThermoBeaconManagerNB
-from nb_servo_node_client import NBServoNodeClient
-from core.control_model import ControlModel
-from pwa_ble_bridge import PWABLEBridge
-import time
-
-# ========= CONFIG =========
-
-DEBUG_UI = False
-DEBUG_SENSORS = False
-DEBUG_BLE = False
-
-# MACs for your two servo nodes
-NODE0_MAC = b'92901cdb5110'  # upstream: Saloon flap
-NODE1_MAC = b'7ea81cdb5110'  # downstream: Galley/Berth split
-
-# ========= INIT =========
-
-print("=" * 60)
-print("Cabin Air Controller: bring-up test")
-print("=" * 60)
-
-# Create BLE servo node clients
-servo_nodes = [
-    NBServoNodeClient(mac_hex=NODE0_MAC, debug=DEBUG_BLE),
-    NBServoNodeClient(mac_hex=NODE1_MAC, debug=DEBUG_BLE),
-]
-
-# Start their internal machines if they need an explicit start/connect bootstrap
-for i, node in enumerate(servo_nodes):
-    try:
-        if hasattr(node, "start"):
-            node.start()
-        print(f"[INIT] Servo node {i} started")
-    except Exception as e:
-        print(f"[INIT] Servo node {i} start() error:", e)
-
-# Shared control model for UI + remote bridges
-control_model = ControlModel()
-
-# Create ThermoBeacon manager (non-blocking version)
-sensors = ThermoBeaconManagerNB(debug=DEBUG_SENSORS)
-
-# Create UI
-ui = UIManager(debug=DEBUG_UI, model=control_model)
-
-# BLE bridge for PWA clients
-pwa_bridge = PWABLEBridge(control_model, debug=DEBUG_BLE)
-
-# Check if servo nodes are scanning at startup
-nodes_scanning_at_startup = any(node.is_scanning() for node in servo_nodes)
-if nodes_scanning_at_startup:
-    print("[INIT] Servo nodes scanning - PWA advertising will be paused briefly")
-
-# Always start the bridge (cleans up stale connections)
-pwa_bridge.start()
-
-# Pause immediately if servos are scanning
-if nodes_scanning_at_startup:
-    pwa_bridge.pause_advertising()
-
-print("[INIT] Setup complete. Entering main loop.")
-
-
-# ========= HELPERS =========
-
-def _send_servo_targets_to_nodes(pending, servo_nodes):
-    """
-    pending looks like:
-        {
-          "node1_saloon_angle": <0-90>,
-          "node2_split_angle":  <0-90>,
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=0.65, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#1a1a1a">
+    <title>Cabin Control</title>
+    <link rel="manifest" href="manifest.json">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #1a1a1a;
+            color: #ffffff;
+            overflow-x: hidden;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #1a1a1a 0%, #2a2a2a 100%);
+            padding: 20px;
+            border-bottom: 2px solid #00aaff;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        
+        .header h1 {
+            color: #00aaff;
+            font-size: 24px;
+            margin-bottom: 10px;
+        }
+        
+        .status-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            background: #2a2a2a;
+            border-radius: 8px;
+        }
+        
+        .status-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #cc0000;
+            margin-right: 8px;
+            display: inline-block;
+        }
+        
+        .status-indicator.connected {
+            background: #00cc00;
+        }
+        
+        .connect-btn {
+            background: #00aaff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        
+        .connect-btn:active {
+            background: #0088cc;
+        }
+        
+        .container {
+            padding: 20px;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        
+        .mode-toggle {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .mode-btn {
+            flex: 1;
+            padding: 15px;
+            border: 2px solid #444;
+            background: #2a2a2a;
+            color: #888;
+            font-size: 18px;
+            font-weight: 600;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .mode-btn.active {
+            border-color: #00aaff;
+            background: #00aaff;
+            color: white;
+        }
+        
+        .zone-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .zone-card {
+            background: #2a2a2a;
+            border-radius: 12px;
+            padding: 12px;
+            border: 2px solid #444;
+            transition: all 0.2s;
+        }
+        
+        .zone-card.enabled {
+            border-color: #00aaff;
+        }
+        
+        .zone-card.priority {
+            border-color: #ffaa00;
+            background: linear-gradient(135deg, #2a2a2a 0%, #3a2a0a 100%);
+        }
+        
+        .zone-card.disabled {
+            border-color: #cc0000;
+            opacity: 0.5;
+        }
+        
+        .zone-header {
+            font-weight: 600;
+            color: #00aaff;
+            margin-top: -5px;
+            font-size: 24px;
         }
 
-    We'll try to deliver:
-      - node1_saloon_angle -> servo_nodes[0]
-      - node2_split_angle  -> servo_nodes[1]
+        .zone-header-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 0px;
+        }
 
-    We use queue_angle() if available. If not, will fall back to send_angle_with_retry.
-    """
-    if not pending:
-        return
+        .zone-temp {
+            font-size: 54px;
+            font-weight: 700;
+            margin: -10px 0 10px 0;
+            display: flex;
+            align-items: baseline;
+            gap: 2px;
+        }
 
-    # Extract targets
-    angle0 = pending.get("node1_saloon_angle", None)
-    angle1 = pending.get("node2_split_angle",  None)
+        .temp-main {
+            font-size: 1em;
+        }
 
-    # Helper to safely call an angle send on a node
-    def _try_send(node, which, angle):
-        if angle is None:
-            return
-        # clamp angle to physical range
-        if angle < 0: angle = 0
-        if angle > 90: angle = 90
+        .temp-decimal {
+            font-size: 0.6em;
+        }
 
-        if node is None:
-            print(f"[BLE] Node {which} missing, skipping")
-            return
+        .zone-top {
+            display: flex;
+            flex-direction: column;
+            gap: 0;
+        }
 
-        # Only send if we think node is connected/healthy-ish
-        ok = True
-        if hasattr(node, "connection_ok"):
-            ok = node.connection_ok()
+        .zone-humidity {
+            font-size: 14px;
+            color: #888;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            margin-top: -13px;
+        }
 
-        if not ok:
-            print(f"[BLE] Node {which} not healthy, skipping angle {angle}")
-            return
+        .temp-icon {
+            width: 24px;
+            height: 48px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            margin-left: -4px;
+            position: relative;
+            top: 5px;
+        }
 
-        # Prefer queue_angle if we have it (non-blocking-ish)
-        if hasattr(node, "queue_angle"):
-            print(f"[BLE] -> queue_angle({angle}) to node {which}")
-            try:
-                node.queue_angle(angle)
-            except Exception as e:
-                print(f"[BLE] queue_angle error on node {which}:", e)
-            return
+        .temp-icon svg {
+            width: 100%;
+            height: 100%;
+        }
 
-        # If we get here we don't know how to command this node
-        print(f"[BLE] No known angle API for node {which}, skipping")
+        .thermo-fill {
+            transition: fill 0.3s ease, y 0.3s ease, height 0.3s ease;
+        }
 
-    # node0 = upstream flap (Saloon distribution)
-    _try_send(servo_nodes[0] if len(servo_nodes) > 0 else None,
-              "upstream",
-              angle0)
+        .thermo-range {
+            fill: none;
+            stroke: #ffffff;
+            stroke-width: 7;
+            opacity: 0.7;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+        }
 
-    # node1 = downstream flap (Galley vs Berth split)
-    _try_send(servo_nodes[1] if len(servo_nodes) > 1 else None,
-              "downstream",
-              angle1)
+        .humidity-icon {
+            display: inline-flex;
+            width: 16px;
+            height: 16px;
+            color: #00aaff;
+        }
+
+        .humidity-icon svg {
+            width: 16px;
+            height: 16px;
+            display: block;
+        }
+
+        .zone-icons {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            align-items: flex-end;
+        }
+
+        .zone-readings {
+            display: flex;
+            flex-direction: column;
+            gap: 0;
+        }
+
+        .zone-icon {
+            display: block;
+            width: 100%;
+        }
+
+        .icon-row {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            gap: 1px;
+            min-width: 42px;
+        }
+
+        .zone-icon svg {
+            display: block;
+        }
+
+        .zone-icon .icon-label {
+            font-size: 11px;
+            color: #ccc;
+            min-width: 26px;
+            text-align: right;
+        }
+
+        .battery-svg {
+            width: 32px;
+            height: 12px;
+        }
+
+        .battery-shell {
+            fill: none;
+            stroke: #666666;
+            stroke-width: 1.2;
+        }
+
+        .battery-fill {
+            height: 8px;
+            fill: transparent;
+        }
+
+        .battery-cap {
+            fill: #666666;
+        }
+
+        .battery-fill.high {
+            fill: #00aaff;
+        }
+
+        .battery-fill.medium {
+            fill: #ffaa00;
+        }
+
+        .battery-fill.low {
+            fill: #cc0000;
+        }
+
+        .battery-fill.unknown,
+        .battery-fill.empty {
+            fill: transparent;
+        }
+
+        .signal-svg {
+            width: 36px;
+            height: 12px;
+        }
+
+        .signal-bar {
+            fill: #444;
+        }
+
+        .signal-bar.active {
+            fill: #00aaff;
+        }
+
+        .icon-label {
+            font-size: 11px;
+            color: #ccc;
+        }
+        
+        .zone-toggle {
+            width: 100%;
+            padding: 8px;
+            margin-top: 10px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        
+        .zone-toggle.enabled {
+            background: #00aaff;
+            color: white;
+        }
+        
+        .zone-toggle.disabled {
+            background: #444;
+            color: #888;
+        }
+
+        .zone-priority-btn {
+            width: 100%;
+            padding: 8px;
+            margin-top: 8px;
+            border: 2px solid #ffaa00;
+            background: #2a2a2a;
+            color: #ffaa00;
+            font-size: 13px;
+            font-weight: 600;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .zone-priority-btn:disabled {
+            border-color: #444;
+            background: #1a1a1a;
+            color: #666;
+            cursor: not-allowed;
+        }
+
+        .zone-priority-btn.active {
+            background: #ffaa00;
+            color: #000;
+        }
+
+        .priority-info {
+            font-size: 11px;
+            color: #888;
+            text-align: center;
+            margin-top: 4px;
+        }
+
+        .airflow-bars-container {
+            background: #2a2a2a;
+            border-radius: 12px;
+            padding: 20px 20px 28px 20px;
+            margin-bottom: 20px;
+        }
+
+        .airflow-title {
+            text-align: center;
+            font-weight: 600;
+            margin-bottom: 15px;
+            color: #00aaff;
+            font-size: 18px;
+        }
+
+        .bars-wrapper {
+            display: flex;
+            justify-content: space-around;
+            align-items: flex-end;
+            height: 275px;
+            background: #1a1a1a;
+            border-radius: 8px;
+            padding: 38px 10px 7px 10px;
+            position: relative;
+            touch-action: none;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        .airflow-bar {
+            flex: 1;
+            max-width: 70px;
+            background: linear-gradient(180deg, #00aaff 0%, #0088cc 100%);
+            border-radius: 8px 8px 0 0;
+            position: relative;
+            transition: background 0.3s;
+            cursor: ns-resize;
+            touch-action: none;
+            min-height: 20px;
+        }
+
+        .airflow-bar.dragging {
+            background: linear-gradient(180deg, #00ddff 0%, #00aaff 100%);
+        }
+
+        .airflow-bar.priority {
+            background: linear-gradient(180deg, #ffaa00 0%, #dd8800 100%);
+        }
+
+        .airflow-bar.disabled {
+            background: #444;
+            opacity: 0.5;
+        }
+
+        .bar-label {
+            position: absolute;
+            bottom: -30px;
+            left: 0;
+            right: 0;
+            text-align: center;
+            font-size: 16px;
+            font-weight: 600;
+            color: #00aaff;
+            letter-spacing: 0.5px;
+        }
+
+        .bar-value {
+            position: absolute;
+            top: -25px;
+            left: 0;
+            right: 0;
+            text-align: center;
+            font-size: 16px;
+            font-weight: 700;
+            color: #00aaff;
+        }
+
+        .bar-value.disabled {
+            color: #666;
+        }
+
+        .presets-container {
+            background: #2a2a2a;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        .presets-title {
+            text-align: center;
+            font-weight: 600;
+            margin-bottom: 15px;
+            color: #00aaff;
+            font-size: 18px;
+        }
+
+        .presets-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+            margin-bottom: 15px;
+        }
+
+        .preset-btn {
+            background: #1a1a1a;
+            border: 2px solid #00aaff;
+            border-radius: 8px;
+            padding: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+            color: white;
+            font-family: inherit;
+        }
+
+        .preset-btn:active {
+            background: #0d0d0d;
+            transform: scale(0.98);
+        }
+
+        .preset-btn.active {
+            border-color: #ffaa00;
+            background: linear-gradient(135deg, #1a1a1a 0%, #2a1a0a 100%);
+        }
+
+        .preset-name {
+            font-weight: 600;
+            font-size: 15px;
+            margin-bottom: 4px;
+            color: #00aaff;
+        }
+
+        .preset-btn.active .preset-name {
+            color: #ffaa00;
+        }
+
+        .preset-values {
+            font-size: 13px;
+            color: #888;
+            font-family: monospace;
+        }
+
+        .preset-save-btn {
+            width: 100%;
+            background: #2a2a2a;
+            border: 2px solid #00aaff;
+            border-radius: 8px;
+            padding: 12px;
+            cursor: pointer;
+            color: #00aaff;
+            font-weight: 600;
+            font-size: 15px;
+            font-family: inherit;
+            transition: all 0.2s;
+        }
+
+        .preset-save-btn:active {
+            background: #00aaff;
+            color: white;
+        }
+
+        .custom-presets-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+            margin-top: 15px;
+        }
+
+        .custom-preset-wrapper {
+            position: relative;
+        }
+
+        .custom-preset-btn {
+            background: #1a1a1a;
+            border: 2px solid #00aaff;
+            border-radius: 8px;
+            padding: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+            color: white;
+            font-family: inherit;
+            width: 100%;
+            text-align: center;
+        }
+
+        .custom-preset-btn:active {
+            background: #0d0d0d;
+            transform: scale(0.98);
+        }
+
+        .custom-preset-btn.active {
+            border-color: #ffaa00;
+            background: linear-gradient(135deg, #1a1a1a 0%, #2a1a0a 100%);
+        }
+
+        .custom-preset-btn .preset-name {
+            color: #00aaff;
+            font-weight: 600;
+            font-size: 15px;
+            margin-bottom: 4px;
+        }
+
+        .custom-preset-btn.active .preset-name {
+            color: #ffaa00;
+        }
+
+        .custom-preset-btn .preset-values {
+            font-size: 13px;
+            color: #888;
+            font-family: monospace;
+        }
+
+        .custom-preset-delete {
+            position: absolute;
+            top: 6px;
+            right: 6px;
+            background: #cc0000;
+            border: none;
+            border-radius: 50%;
+            color: white;
+            width: 28px;
+            height: 28px;
+            cursor: pointer;
+            font-size: 20px;
+            font-weight: bold;
+            line-height: 28px;
+            text-align: center;
+            transition: all 0.2s;
+            z-index: 10;
+            user-select: none;
+        }
+
+        .custom-preset-delete:active {
+            background: #aa0000;
+            transform: scale(0.95);
+        }
+
+        @media (max-width: 360px) {
+            .zone-grid {
+                grid-template-columns: 1fr;
+            }
+            .presets-grid {
+                grid-template-columns: 1fr;
+            }
+            .custom-presets-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🚢 Cabin Airflow Control</h1>
+        <div class="status-bar">
+            <div>
+                <span class="status-indicator" id="statusIndicator"></span>
+                <span id="statusText">Disconnected</span>
+            </div>
+            <button class="connect-btn" id="connectBtn" onclick="toggleConnection()">Connect</button>
+        </div>
+    </div>
+    
+    <div class="container">
+        <!-- Mode Toggle -->
+        <div class="mode-toggle">
+            <button class="mode-btn active" id="autoBtn" onclick="setMode(true)">AUTO</button>
+            <button class="mode-btn" id="manualBtn" onclick="setMode(false)">MANUAL</button>
+        </div>
+        
+        <!-- Zone Cards -->
+        <div class="zone-grid">
+            <div class="zone-card enabled" id="zoneSaloon">
+                <div class="zone-header-row">
+                    <div class="zone-header">Saloon</div>
+                    <div class="zone-icons">
+                        <span class="zone-signal zone-icon" id="signalSaloon" aria-label="Saloon signal"></span>
+                        <span class="zone-battery zone-icon" id="batterySaloon" aria-label="Saloon battery"></span>
+                    </div>
+                </div>
+                <div class="zone-top">
+                    <div class="zone-readings">
+                        <div class="zone-temp">
+                            <span class="temp-icon" aria-hidden="true">
+                                <svg viewBox="0 0 244 511.71">
+                                    <rect class="thermo-fill" id="thermoColumnSaloon" data-bottom="360" data-maxheight="300" data-minfill="0.12" x="102" y="330" width="36" height="30" rx="18"></rect>
+                                    <circle class="thermo-fill" id="thermoBulbSaloon" cx="120" cy="404" r="60"></circle>
+                                    <path class="thermo-range" d="M102,78 a18,18 0 0 1 18,-18 a18,18 0 0 1 18,18 v256 a72,72 0 1 1 -36,0 v-256"></path>
+                                </svg>
+                            </span>
+                            <span id="tempSaloon"><span class="temp-main">Wa</span><span class="temp-decimal">.it</span></span>
+                        </div>
+                        <div class="zone-humidity">
+                            <span class="humidity-icon" aria-hidden="true">
+                                <svg viewBox="0 0 81.97 122.88">
+                                    <path fill="currentColor" fill-rule="evenodd" clip-rule="evenodd" d="M40.95,0c7.88,33.66,17.45,35.4,33.8,60.69c4.25,6.57,7.22,13.56,7.22,21.58c0,11.14-4.02,20.69-12.07,28.65c-8.08,7.96-17.71,11.96-28.93,11.96c-11.19,0-20.8-4-28.88-11.96C4.03,102.96,0,93.41,0,82.27c0-8.06,3.02-15.1,7.31-21.71C23.69,35.33,33.22,33.55,40.95,0L40.95,0L40.95,0z M17.57,71.78c2.29-0.21,4.31,1.48,4.51,3.76c0.52,5.52,1.73,10.61,4.04,15c2.23,4.24,5.55,7.89,10.35,10.7c1.98,1.16,2.64,3.71,1.48,5.68c-1.16,1.98-3.71,2.64-5.68,1.48c-6.25-3.66-10.58-8.42-13.51-13.99c-2.95-5.61-4.36-11.85-4.95-18.12C13.6,74.02,15.3,71.99,17.57,71.78L17.57,71.78z"></path>
+                                </svg>
+                            </span>
+                            <span id="humSaloon">--% Humidity</span>
+                        </div>
+                    </div>
+                </div>
+                <button class="zone-toggle enabled" onclick="toggleZone(0)">ON</button>
+                <button class="zone-priority-btn" id="prioSaloon" onclick="setPriority(0)" disabled>
+                    Set Priority
+                </button>
+                <div class="priority-info">AUTO mode only</div>
+            </div>
+            <div class="zone-card enabled" id="zoneGalley">
+                <div class="zone-header-row">
+                    <div class="zone-header">Galley</div>
+                    <div class="zone-icons">
+                        <span class="zone-signal zone-icon" id="signalGalley" aria-label="Galley signal"></span>
+                        <span class="zone-battery zone-icon" id="batteryGalley" aria-label="Galley battery"></span>
+                    </div>
+                </div>
+                <div class="zone-top">
+                    <div class="zone-readings">
+                        <div class="zone-temp">
+                            <span class="temp-icon" aria-hidden="true">
+                                <svg viewBox="0 0 244 511.71">
+                                    <rect class="thermo-fill" id="thermoColumnGalley" data-bottom="360" data-maxheight="300" data-minfill="0.12" x="102" y="330" width="36" height="30" rx="18"></rect>
+                                    <circle class="thermo-fill" id="thermoBulbGalley" cx="120" cy="404" r="60"></circle>
+                                    <path class="thermo-range" d="M102,78 a18,18 0 0 1 18,-18 a18,18 0 0 1 18,18 v256 a72,72 0 1 1 -36,0 v-256"></path>
+                                </svg>
+                            </span>
+                            <span id="tempGalley"><span class="temp-main">Wa</span><span class="temp-decimal">.it</span></span>
+                        </div>
+                        <div class="zone-humidity">
+                            <span class="humidity-icon" aria-hidden="true">
+                                <svg viewBox="0 0 81.97 122.88">
+                                    <path fill="currentColor" fill-rule="evenodd" clip-rule="evenodd" d="M40.95,0c7.88,33.66,17.45,35.4,33.8,60.69c4.25,6.57,7.22,13.56,7.22,21.58c0,11.14-4.02,20.69-12.07,28.65c-8.08,7.96-17.71,11.96-28.93,11.96c-11.19,0-20.8-4-28.88-11.96C4.03,102.96,0,93.41,0,82.27c0-8.06,3.02-15.1,7.31-21.71C23.69,35.33,33.22,33.55,40.95,0L40.95,0L40.95,0z M17.57,71.78c2.29-0.21,4.31,1.48,4.51,3.76c0.52,5.52,1.73,10.61,4.04,15c2.23,4.24,5.55,7.89,10.35,10.7c1.98,1.16,2.64,3.71,1.48,5.68c-1.16,1.98-3.71,2.64-5.68,1.48c-6.25-3.66-10.58-8.42-13.51-13.99c-2.95-5.61-4.36-11.85-4.95-18.12C13.6,74.02,15.3,71.99,17.57,71.78L17.57,71.78z"></path>
+                                </svg>
+                            </span>
+                            <span id="humGalley">--% Humidity</span>
+                        </div>
+                    </div>
+                </div>
+                <button class="zone-toggle enabled" onclick="toggleZone(1)">ON</button>
+                <button class="zone-priority-btn" id="prioGalley" onclick="setPriority(1)" disabled>
+                    Set Priority
+                </button>
+                <div class="priority-info">AUTO mode only</div>
+            </div>
+            <div class="zone-card enabled" id="zoneBerth">
+                <div class="zone-header-row">
+                    <div class="zone-header">Berth</div>
+                    <div class="zone-icons">
+                        <span class="zone-signal zone-icon" id="signalBerth" aria-label="Berth signal"></span>
+                        <span class="zone-battery zone-icon" id="batteryBerth" aria-label="Berth battery"></span>
+                    </div>
+                </div>
+                <div class="zone-top">
+                    <div class="zone-readings">
+                        <div class="zone-temp">
+                            <span class="temp-icon" aria-hidden="true">
+                                <svg viewBox="0 0 244 511.71">
+                                    <rect class="thermo-fill" id="thermoColumnBerth" data-bottom="360" data-maxheight="300" data-minfill="0.12" x="102" y="330" width="36" height="30" rx="18"></rect>
+                                    <circle class="thermo-fill" id="thermoBulbBerth" cx="120" cy="404" r="60"></circle>
+                                    <path class="thermo-range" d="M102,78 a18,18 0 0 1 18,-18 a18,18 0 0 1 18,18 v256 a72,72 0 1 1 -36,0 v-256"></path>
+                                </svg>
+                            </span>
+                            <span id="tempBerth"><span class="temp-main">Wa</span><span class="temp-decimal">.it</span></span>
+                        </div>
+                        <div class="zone-humidity">
+                            <span class="humidity-icon" aria-hidden="true">
+                                <svg viewBox="0 0 81.97 122.88">
+                                    <path fill="currentColor" fill-rule="evenodd" clip-rule="evenodd" d="M40.95,0c7.88,33.66,17.45,35.4,33.8,60.69c4.25,6.57,7.22,13.56,7.22,21.58c0,11.14-4.02,20.69-12.07,28.65c-8.08,7.96-17.71,11.96-28.93,11.96c-11.19,0-20.8-4-28.88-11.96C4.03,102.96,0,93.41,0,82.27c0-8.06,3.02-15.1,7.31-21.71C23.69,35.33,33.22,33.55,40.95,0L40.95,0L40.95,0z M17.57,71.78c2.29-0.21,4.31,1.48,4.51,3.76c0.52,5.52,1.73,10.61,4.04,15c2.23,4.24,5.55,7.89,10.35,10.7c1.98,1.16,2.64,3.71,1.48,5.68c-1.16,1.98-3.71,2.64-5.68,1.48c-6.25-3.66-10.58-8.42-13.51-13.99c-2.95-5.61-4.36-11.85-4.95-18.12C13.6,74.02,15.3,71.99,17.57,71.78L17.57,71.78z"></path>
+                                </svg>
+                            </span>
+                            <span id="humBerth">--% Humidity</span>
+                        </div>
+                    </div>
+                </div>
+                <button class="zone-toggle enabled" onclick="toggleZone(2)">ON</button>
+                <button class="zone-priority-btn" id="prioBerth" onclick="setPriority(2)" disabled>
+                    Set Priority
+                </button>
+                <div class="priority-info">AUTO mode only</div>
+            </div>
+        </div>
+        
+        <!-- Airflow Bars (Always Visible) -->
+        <div class="airflow-bars-container">
+            <div class="airflow-title" id="airflowTitle">Airflow Distribution</div>
+            <div class="bars-wrapper" id="barsWrapper">
+                <div class="airflow-bar" id="barSaloon" style="height: 33%;">
+                    <div class="bar-value" id="valueSaloon">33%</div>
+                    <div class="bar-label">Saloon</div>
+                </div>
+                <div class="airflow-bar" id="barGalley" style="height: 34%;">
+                    <div class="bar-value" id="valueGalley">34%</div>
+                    <div class="bar-label">Galley</div>
+                </div>
+                <div class="airflow-bar" id="barBerth" style="height: 33%;">
+                    <div class="bar-value" id="valueBerth">33%</div>
+                    <div class="bar-label">Berth</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Preset Buttons -->
+        <div class="presets-container">
+            <div class="presets-title">Quick Presets</div>
+            <div class="presets-grid">
+                <button class="preset-btn" data-preset="even" onclick="applyPreset('even')">
+                    <div class="preset-name">Even Split</div>
+                    <div class="preset-values">33 / 33 / 34</div>
+                </button>
+                <button class="preset-btn" data-preset="saloon" onclick="applyPreset('saloon')">
+                    <div class="preset-name">Saloon Focus</div>
+                    <div class="preset-values">65 / 25 / 10</div>
+                </button>
+                <button class="preset-btn" data-preset="sleep" onclick="applyPreset('sleep')">
+                    <div class="preset-name">Sleep Mode</div>
+                    <div class="preset-values">10 / 10 / 80</div>
+                </button>
+                <button class="preset-btn" data-preset="cooking" onclick="applyPreset('cooking')">
+                    <div class="preset-name">Cooking Mode</div>
+                    <div class="preset-values">20 / 70 / 10</div>
+                </button>
+                <button class="preset-btn" data-preset="allsaloon" onclick="applyPreset('allsaloon')">
+                    <div class="preset-name">All Saloon</div>
+                    <div class="preset-values">100 / 0 / 0</div>
+                </button>
+            </div>
+            <button class="preset-save-btn" onclick="saveCustomPreset()">
+                Save Current as Custom
+            </button>
+            <div id="customPresetsContainer"></div>
+        </div>
+
+    </div>
+    
+    <script>
+        // BLE Configuration
+        const SERVICE_UUID = 'f0c7a69c-4a64-4c6a-a3e2-608764a7c4b1';
+        const STATE_CHAR_UUID = 'f0c7a69c-4a64-4c6a-a3e2-608764a7c4b2';
+        const SENSOR_CHAR_UUID = 'f0c7a69c-4a64-4c6a-a3e2-608764a7c4b4';
+        const COMMAND_CHAR_UUID = 'f0c7a69c-4a64-4c6a-a3e2-608764a7c4b3';
+        
+        // Command opcodes
+        const OP_SET_MODE = 0x01;
+        const OP_SET_ZONE_ENABLED = 0x02;
+        const OP_SET_SHARE = 0x03;
+        const OP_CLEAR_PRIORITY = 0x04;
+        const OP_START_PRIORITY = 0x05;
+        const OP_SET_PRESET_INFO = 0x06;
+        
+        // BLE objects
+        let device = null;
+        let stateChar = null;
+        let sensorChar = null;
+        let commandChar = null;
+        
+        // State
+        const ZONE_NAMES = ['Saloon', 'Galley', 'Berth'];
+        const SIGNAL_BAR_HEIGHTS = [2, 4, 6, 8, 10];
+        const BATTERY_FILL_WIDTH = 18;
+        const TEMP_MIN_C = -5;
+        const TEMP_MAX_C = 35;
+        let currentMode = 'AUTO';
+        let currentPriority = null;
+        let zoneEnabled = [true, true, true];
+        let lastBerthShare = 50;  // Track last known berth_share for ratio recovery from 0%
+        
+        function clamp(value, min, max) {
+            return Math.min(max, Math.max(min, value));
+        }
+
+        function initializeZoneIndicators() {
+            ZONE_NAMES.forEach(name => {
+                updateZoneIndicators(name, null, null);
+                updateThermometer(name, null);
+            });
+        }
+
+        function updateZoneIndicators(zoneName, battPct, signalBars) {
+            const battEl = document.getElementById(`battery${zoneName}`);
+            if (battEl) {
+                battEl.innerHTML = renderBatteryIcon(battPct);
+            }
+
+            const sigEl = document.getElementById(`signal${zoneName}`);
+            if (sigEl) {
+                sigEl.innerHTML = renderSignalIcon(signalBars);
+            }
+        }
+
+        function updateThermometer(zoneName, tempValue) {
+            const column = document.getElementById(`thermoColumn${zoneName}`);
+            const bulb = document.getElementById(`thermoBulb${zoneName}`);
+            if (!column || !bulb) return;
+
+            let fillColor = '#00aaff';
+            if (typeof tempValue !== 'number' || Number.isNaN(tempValue)) {
+                fillColor = '#555555';
+            } else if (tempValue >= 20) {
+                fillColor = '#ff4d4d';
+            } else if (tempValue >= 10) {
+                fillColor = '#ffaa33';
+            }
+            column.setAttribute('fill', fillColor);
+            bulb.setAttribute('fill', fillColor);
+
+            const bottom = parseFloat(column.dataset.bottom) || 360;
+            const maxHeight = parseFloat(column.dataset.maxheight) || 300;
+            const minFill = parseFloat(column.dataset.minfill) || 0.12;
+
+            let fillPct = minFill;
+            if (typeof tempValue === 'number' && !Number.isNaN(tempValue)) {
+                let pct = (tempValue - TEMP_MIN_C) / (TEMP_MAX_C - TEMP_MIN_C);
+                pct = clamp(pct, 0, 1);
+                fillPct = minFill + pct * (1 - minFill);
+            }
+
+            const height = maxHeight * fillPct;
+            const y = bottom - height;
+            column.setAttribute('y', y.toFixed(2));
+            column.setAttribute('height', height.toFixed(2));
+        }
+
+        function renderBatteryIcon(level) {
+            const pct = typeof level === 'number' && !Number.isNaN(level)
+                ? clamp(level, 0, 100)
+                : null;
+            const width = pct === null ? 0 : ((BATTERY_FILL_WIDTH * pct) / 100).toFixed(1);
+
+            let levelClass = 'unknown';
+            if (pct === null) {
+                levelClass = 'unknown';
+            } else if (pct >= 70) {
+                levelClass = 'high';
+            } else if (pct >= 30) {
+                levelClass = 'medium';
+            } else if (pct > 0) {
+                levelClass = 'low';
+            } else {
+                levelClass = 'empty';
+            }
+
+            const label = pct === null ? '--%' : `${pct}%`;
+            const aria = pct === null ? 'Battery: no data' : `Battery level: ${label}`;
+
+            return `
+                <div class="icon-row">
+                    <svg viewBox="0 0 24 12" class="battery-svg" role="img" aria-label="${aria}">
+                        <rect class="battery-shell" x="1" y="2" width="18" height="8" rx="1" ry="1"></rect>
+                        <rect class="battery-fill ${levelClass}" x="1" y="2" width="${width}" height="8"></rect>
+                        <rect class="battery-cap" x="20.5" y="4" width="2.5" height="4" rx="1" ry="1"></rect>
+                    </svg>
+                    <span class="icon-label">${label}</span>
+                </div>
+            `;
+        }
+
+        function renderSignalIcon(level) {
+            const bars = typeof level === 'number' && !Number.isNaN(level)
+                ? clamp(Math.round(level), 0, 5)
+                : null;
+            let svgBars = '';
+            for (let i = 0; i < 5; i++) {
+                const h = SIGNAL_BAR_HEIGHTS[i];
+                const y = 11 - h;
+                const active = bars !== null && i < bars;
+                svgBars += `<rect class="signal-bar ${active ? 'active' : ''}" x="${1 + (i * 3)}" y="${y}" width="2" height="${h}"></rect>`;
+            }
+            const label = bars === null ? '--/5' : `${bars}/5`;
+            const aria = bars === null ? 'Signal: no data' : `Signal strength: ${bars} bars`;
+            return `
+                <div class="icon-row">
+                    <svg viewBox="0 0 18 12" class="signal-svg" role="img" aria-label="${aria}">
+                        ${svgBars}
+                    </svg>
+                    <span class="icon-label">${label}</span>
+                </div>
+            `;
+        }
+        
+        // Check Web Bluetooth support
+        if (!navigator.bluetooth) {
+            alert('Web Bluetooth not supported. Use Chrome/Edge on Android or macOS/iOS 16+');
+        }
+        
+        async function toggleConnection() {
+            if (device && device.gatt.connected) {
+                device.gatt.disconnect();
+            } else {
+                await connect();
+            }
+        }
+        
+        async function connect() {
+            try {
+                device = await navigator.bluetooth.requestDevice({
+                    filters: [{ name: 'Cabin' }],
+                    optionalServices: [SERVICE_UUID]
+                });
+                
+                device.addEventListener('gattserverdisconnected', onDisconnected);
+                
+                const server = await device.gatt.connect();
+                const service = await server.getPrimaryService(SERVICE_UUID);
+
+                stateChar = await service.getCharacteristic(STATE_CHAR_UUID);
+                sensorChar = await service.getCharacteristic(SENSOR_CHAR_UUID);
+                commandChar = await service.getCharacteristic(COMMAND_CHAR_UUID);
+
+                await stateChar.startNotifications();
+                stateChar.addEventListener('characteristicvaluechanged', onStateChanged);
+
+                await sensorChar.startNotifications();
+                sensorChar.addEventListener('characteristicvaluechanged', onSensorChanged);
+
+                // Read initial state
+                const value = await stateChar.readValue();
+                decodeState(value);
+                
+                updateConnectionUI(true);
+                
+            } catch (error) {
+                console.error('Connection failed:', error);
+                alert('Connection failed: ' + error.message);
+            }
+        }
+        
+        function onDisconnected() {
+            updateConnectionUI(false);
+            device = null;
+            stateChar = null;
+            sensorChar = null;
+            commandChar = null;
+        }
+
+        function onSensorChanged(event) {
+            decodeSensor(event.target.value);
+        }
+        
+        function updateConnectionUI(connected) {
+            const indicator = document.getElementById('statusIndicator');
+            const text = document.getElementById('statusText');
+            const btn = document.getElementById('connectBtn');
+            
+            if (connected) {
+                indicator.classList.add('connected');
+                text.textContent = 'Connected';
+                btn.textContent = 'Disconnect';
+            } else {
+                indicator.classList.remove('connected');
+                text.textContent = 'Disconnected';
+                btn.textContent = 'Connect';
+            }
+        }
+        
+        function onStateChanged(event) {
+            decodeState(event.target.value);
+        }
+        
+        function computeDisplayShares(saloon_share, berth_share) {
+            const saloon_en = zoneEnabled[0];
+            const galley_en = zoneEnabled[1];
+            const berth_en = zoneEnabled[2];
+            const enabledCount = zoneEnabled.filter(Boolean).length;
+
+            if (enabledCount === 0) {
+                return [33.33, 33.33, 33.34];
+            }
+
+            if (enabledCount === 1) {
+                return [
+                    saloon_en ? 100 : 0,
+                    galley_en ? 100 : 0,
+                    berth_en ? 100 : 0
+                ];
+            }
+
+            let saloonPct = saloon_en ? saloon_share : 0;
+            let downstream = saloon_en ? (100 - saloonPct) : 100;
+
+            let galleyPct = 0;
+            let berthPct = 0;
+
+            if (galley_en && berth_en) {
+                galleyPct = downstream * (100 - berth_share) / 100;
+                berthPct = downstream * berth_share / 100;
+            } else if (galley_en) {
+                galleyPct = downstream;
+            } else if (berth_en) {
+                berthPct = downstream;
+            }
+
+            if (!saloon_en) saloonPct = 0;
+            if (!galley_en) galleyPct = 0;
+            if (!berth_en) berthPct = 0;
+
+            return [saloonPct, galleyPct, berthPct];
+        }
+
+        function decodeState(dataView) {
+            const bytes = new Uint8Array(dataView.buffer);
+
+            // Decode state
+            const isAuto = bytes[0] === 1;
+            const zoneMask = bytes[1];
+            const saloon_share = bytes[2];    // Saloon: % of total
+            const berth_share = bytes[3];     // Berth: % of downstream split
+            const priorityIdx = bytes[4];
+
+            console.log(`📥 BLE RX: saloon_share=${saloon_share}%, berth_share=${berth_share}%`);
+
+            // Store berth_share for ratio recovery when both Galley/Berth at 0%
+            lastBerthShare = berth_share;
+
+            // Update mode
+            currentMode = isAuto ? 'AUTO' : 'MANUAL';
+            updateModeUI();
+
+            // Update zone enabled states
+            for (let i = 0; i < 3; i++) {
+                zoneEnabled[i] = (zoneMask & (1 << i)) !== 0;
+                updateZoneUI(i);
+            }
+
+            // Update bar shares from device state
+            // Only update if: NOT dragging AND NOT in cooldown period after drag
+            const now = Date.now();
+            if (draggingBarIndex === null && now > ignoreBleDateUntil) {
+                // Convert model values to display percentages (matches nRF UIX_4th.py:1052-1072)
+                barShares = computeDisplayShares(saloon_share, berth_share);
+
+                // Apply priority override (matches nRF UIX_4th.py:1074-1079)
+                const isAuto = currentMode === 'AUTO';
+                const priority_idx = priorityIdx > 0 ? priorityIdx - 1 : null;
+
+                if (isAuto && priority_idx !== null) {
+                    // In AUTO with priority: override bars to show 100% for priority zone
+                    for (let i = 0; i < 3; i++) {
+                        if (i === priority_idx) {
+                            barShares[i] = 100;  // Priority zone gets 100%
+                        } else {
+                            barShares[i] = 0;    // Others get 0%
+                        }
+                    }
+                    console.log(`   📊 Bars (PRIORITY ${ZONE_NAMES[priority_idx]}): S=${barShares[0].toFixed(1)}%, G=${barShares[1].toFixed(1)}%, B=${barShares[2].toFixed(1)}%`);
+                } else {
+                    console.log(`   📊 Bars: S=${barShares[0].toFixed(1)}%, G=${barShares[1].toFixed(1)}%, B=${barShares[2].toFixed(1)}%`);
+                }
+
+                updateBarVisuals();
+                evaluatePresetValidity(barShares);
+            } else {
+                console.log(`   ⏸️ Ignoring BLE update (dragging=${draggingBarIndex}, cooldown=${now < ignoreBleDateUntil})`);
+            }
+
+            // Update priority
+            currentPriority = priorityIdx > 0 ? priorityIdx - 1 : null;
+            updatePriorityUI();
+        }
+
+        function decodeSensor(dataView) {
+            const bytes = new Uint8Array(dataView.buffer);
+
+            // Decode 3 zones (18 bytes total, 6 bytes each)
+            for (let i = 0; i < 3; i++) {
+                const offset = i * 6;
+
+                // Temperature: int16 little-endian, divide by 10
+                const tempRaw = new Int16Array(bytes.buffer, offset, 1)[0];
+                const tempValue = tempRaw === 32767 ? null : (tempRaw / 10.0);
+
+                // Format temperature with separate styling for main and decimal parts
+                let tempHTML;
+                if (tempValue === null) {
+                    tempHTML = '<span class="temp-main">Wa</span><span class="temp-decimal">.it</span>';
+                } else {
+                    const tempStr = tempValue.toFixed(1);
+                    const parts = tempStr.split('.');
+                    const mainPart = parts[0];
+                    const decimalPart = parts[1];
+                    tempHTML = `<span class="temp-main">${mainPart}</span><span class="temp-decimal">.${decimalPart}°C</span>`;
+                }
+
+                // Humidity
+                const humidity = bytes[offset + 2];
+                const hum = humidity === 255 ? '--' : humidity.toFixed(0);
+
+                // Battery level
+                const batteryRaw = bytes[offset + 3];
+                const battery = batteryRaw === 255 ? null : batteryRaw;
+
+                // Signal strength (0-5 bars)
+                const signalRaw = bytes[offset + 4];
+                const signalBars = signalRaw === 255 ? null : clamp(signalRaw, 0, 5);
+
+                // Update UI
+                const zoneName = ZONE_NAMES[i];
+                document.getElementById(`temp${zoneName}`).innerHTML = tempHTML;
+                document.getElementById(`hum${zoneName}`).textContent = `${hum}% Humidity`;
+                updateZoneIndicators(zoneName, battery, signalBars);
+                updateThermometer(zoneName, tempValue);
+            }
+        }
+
+        function updateModeUI() {
+            const isAuto = currentMode === 'AUTO';
+            document.getElementById('autoBtn').classList.toggle('active', isAuto);
+            document.getElementById('manualBtn').classList.toggle('active', !isAuto);
+
+            // Enable/disable priority buttons based on mode
+            const priorityButtons = [
+                document.getElementById('prioSaloon'),
+                document.getElementById('prioGalley'),
+                document.getElementById('prioBerth')
+            ];
+            priorityButtons.forEach(btn => {
+                btn.disabled = !isAuto;
+            });
+
+            // Update airflow bars title
+            const title = document.getElementById('airflowTitle');
+            if (isAuto) {
+                title.textContent = 'Airflow Distribution (Auto)';
+                title.style.color = '#888';
+            } else {
+                title.textContent = 'Airflow Distribution (Drag to Adjust)';
+                title.style.color = '#00aaff';
+            }
+
+            // Update bars cursor style
+            const bars = document.querySelectorAll('.airflow-bar');
+            bars.forEach(bar => {
+                if (isAuto) {
+                    bar.style.cursor = 'default';
+                } else {
+                    bar.style.cursor = 'ns-resize';
+                }
+            });
+        }
+        
+        function updateZoneUI(idx) {
+            const card = document.getElementById(`zone${ZONE_NAMES[idx]}`);
+            const btn = card.querySelector('.zone-toggle');
+
+            card.className = 'zone-card';
+            if (currentPriority === idx) {
+                card.classList.add('priority');
+            } else if (zoneEnabled[idx]) {
+                card.classList.add('enabled');
+            } else {
+                card.classList.add('disabled');
+            }
+
+            btn.className = 'zone-toggle';
+            btn.classList.add(zoneEnabled[idx] ? 'enabled' : 'disabled');
+            btn.textContent = zoneEnabled[idx] ? 'ON' : 'OFF';
+        }
+        
+        function updatePriorityUI() {
+            for (let i = 0; i < 3; i++) {
+                const btn = document.getElementById(`prio${ZONE_NAMES[i]}`);
+                btn.classList.toggle('active', currentPriority === i);
+                updateZoneUI(i);
+            }
+            // Update bar colors (priority bar is orange)
+            updateBarVisuals();
+        }
+        
+        async function sendCommand(opcode, ...params) {
+            if (!commandChar) return;
+            try {
+                const cmd = new Uint8Array([opcode, ...params]);
+                await commandChar.writeValue(cmd);
+            } catch (error) {
+                console.error('Send failed:', error);
+            }
+        }
+        
+        async function setMode(isAuto) {
+            if (isAuto && activePreset !== null) {
+                console.log('⚠️ Clearing preset due to AUTO mode');
+                clearActivePreset();
+            }
+            await sendCommand(OP_SET_MODE, isAuto ? 1 : 0);
+        }
+        
+        function toggleZone(idx) {
+            const disabling = zoneEnabled[idx];
+            if (disabling && activePreset !== null) {
+                console.log(`⚠️ Clearing preset due to disabling ${ZONE_NAMES[idx]}`);
+                clearActivePreset();
+            }
+            sendCommand(OP_SET_ZONE_ENABLED, idx, zoneEnabled[idx] ? 0 : 1);
+        }
+
+        function setPriority(idx) {
+            if (currentPriority === idx) {
+                clearPriority();
+            } else {
+                sendCommand(OP_START_PRIORITY, idx);
+            }
+        }
+        
+        function clearPriority() {
+            sendCommand(OP_CLEAR_PRIORITY);
+        }
+
+        // ===== AIRFLOW BAR DRAGGING =====
+
+        let barShares = [33, 34, 33];  // [Saloon, Galley, Berth]
+        let draggingBarIndex = null;
+        let dragStartY = null;
+        let dragStartShares = null;
+        let barsWrapperHeight = 0;
+        let ignoreBleDateUntil = 0;  // Timestamp - ignore BLE updates until this time
+
+        function initAirflowBars() {
+            const wrapper = document.getElementById('barsWrapper');
+            if (!wrapper) return;
+
+            barsWrapperHeight = wrapper.clientHeight - 30;  // Account for padding
+
+            // Touch events on wrapper (start)
+            wrapper.addEventListener('touchstart', onBarDragStart, { passive: false });
+
+            // Touch events on document (move/end) - prevents losing drag when leaving bars
+            document.addEventListener('touchmove', onBarDragMove, { passive: false });
+            document.addEventListener('touchend', onBarDragEnd);
+            document.addEventListener('touchcancel', onBarDragEnd);
+
+            // Mouse events
+            wrapper.addEventListener('mousedown', onBarDragStart);
+
+            // Mouse move/up on document - prevents losing drag when cursor leaves bars
+            document.addEventListener('mousemove', onBarDragMove);
+            document.addEventListener('mouseup', onBarDragEnd);
+        }
+
+        function onBarDragStart(e) {
+            // Don't allow dragging in AUTO mode
+            if (currentMode === 'AUTO') return;
+
+            e.preventDefault();
+
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+            const target = e.target.closest('.airflow-bar');
+
+            if (!target) return;
+
+            // Determine which bar was clicked
+            const barId = target.id;
+            if (barId === 'barSaloon') draggingBarIndex = 0;
+            else if (barId === 'barGalley') draggingBarIndex = 1;
+            else if (barId === 'barBerth') draggingBarIndex = 2;
+            else return;
+
+            // Check if zone is enabled
+            if (!zoneEnabled[draggingBarIndex]) return;
+
+            // Prevent dragging if this is the only enabled zone
+            const enabledCount = zoneEnabled.filter(Boolean).length;
+            if (enabledCount === 1) {
+                console.log(`🚫 Drag ignored: only ${ZONE_NAMES[draggingBarIndex]} is enabled`);
+                draggingBarIndex = null;
+                return;
+            }
+
+            dragStartY = clientY;
+            dragStartShares = [...barShares];
+            target.classList.add('dragging');
+        }
+
+        function onBarDragMove(e) {
+            if (draggingBarIndex === null) return;
+            e.preventDefault();
+
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+            const deltaY = dragStartY - clientY;  // Positive = dragging up
+
+            // Reduce sensitivity for better mouse control (touch uses full sensitivity)
+            const sensitivity = e.touches ? 1.0 : 0.6;  // 60% sensitivity for mouse
+            const deltaPercent = (deltaY / barsWrapperHeight) * 100 * sensitivity;
+
+            // Calculate new share for dragged bar
+            let newShare = dragStartShares[draggingBarIndex] + deltaPercent;
+
+            // Get enabled zones
+            const saloon_en = zoneEnabled[0];
+            const galley_en = zoneEnabled[1];
+            const berth_en = zoneEnabled[2];
+            const enabledCount = zoneEnabled.filter(e => e).length;
+
+            // Apply zone-specific clamping BEFORE setting the value
+            if (draggingBarIndex === 0) {
+                // Saloon: can be 0-100%
+                newShare = Math.max(0, Math.min(100, newShare));
+            } else if (draggingBarIndex === 1 || draggingBarIndex === 2) {
+                // Galley or Berth
+                if (saloon_en && galley_en && berth_en) {
+                    // 3 zones enabled: Galley/Berth limited by downstream
+                    const downstream = 100 - dragStartShares[0];  // Saloon stays constant
+                    const maxAvailable = downstream;  // Can go to 0% (other zone gets remainder)
+                    const clamped = Math.max(0, Math.min(maxAvailable, newShare));
+                    if (clamped !== newShare) {
+                        console.log(`   ⚠️ Clamping ${ZONE_NAMES[draggingBarIndex]}: ${newShare.toFixed(1)}% → ${clamped.toFixed(1)}% (max downstream: ${downstream.toFixed(1)}%)`);
+                    }
+                    newShare = clamped;
+                } else {
+                    // Only 2 zones: can affect Saloon, allow 0-100%
+                    newShare = Math.max(0, Math.min(100, newShare));
+                }
+            }
+
+            const oldShare = dragStartShares[draggingBarIndex];
+            const shareDiff = newShare - oldShare;
+
+            // Start with original shares
+            barShares = [...dragStartShares];
+            barShares[draggingBarIndex] = newShare;
+
+            // Apply adjustment logic based on which bar is being dragged
+            if (draggingBarIndex === 0) {
+                // SALOON: affects Galley and Berth proportionally
+                const otherIndices = [];
+                if (zoneEnabled[1]) otherIndices.push(1);  // Galley
+                if (zoneEnabled[2]) otherIndices.push(2);  // Berth
+
+                if (otherIndices.length > 0) {
+                    const totalOther = otherIndices.reduce((sum, i) => sum + dragStartShares[i], 0);
+                    const remainingShare = 100 - newShare;
+
+                    if (totalOther > 0) {
+                        // Distribute proportionally based on current shares
+                        for (const i of otherIndices) {
+                            const ratio = dragStartShares[i] / totalOther;
+                            barShares[i] = remainingShare * ratio;
+                        }
+
+                    } else {
+                        // Both were 0 at drag start
+                        const galley_en = zoneEnabled[1];
+                        const berth_en = zoneEnabled[2];
+
+                        if (galley_en && berth_en) {
+                            // Use last known berth_share ratio (matches nRF behavior)
+                            const galley_pct = remainingShare * (100 - lastBerthShare) / 100;
+                            const berth_pct = remainingShare * lastBerthShare / 100;
+                            barShares[1] = galley_pct;  // Galley
+                            barShares[2] = berth_pct;   // Berth
+                            console.log(`   📐 Recovering from 0%: using lastBerthShare=${lastBerthShare}%`);
+
+                        } else if (berth_en && !galley_en) {
+                            // Only Berth enabled downstream
+                            barShares[1] = 0;
+                            barShares[2] = remainingShare;
+
+                        } else if (galley_en && !berth_en) {
+                            // Only Galley enabled downstream
+                            barShares[1] = remainingShare;
+                            barShares[2] = 0;
+
+                        } else {
+                            // Neither enabled; nothing to allocate
+                            barShares[1] = 0;
+                            barShares[2] = 0;
+                        }
+                    }
+                }
+
+                // Ensure disabled downstream zones remain at 0 during drag
+                if (!zoneEnabled[1]) barShares[1] = 0;
+                if (!zoneEnabled[2]) barShares[2] = 0;
+
+                console.log(`   🔧 Saloon drag: S=${barShares[0].toFixed(1)}%, G=${barShares[1].toFixed(1)}%, B=${barShares[2].toFixed(1)}%`);
+            
 
 
-# ========= MAIN LOOP =========
+            } else if (draggingBarIndex === 1) {
+                // GALLEY: only affects Berth (Saloon MUST stay constant with 3 zones)
+                const galley_en = zoneEnabled[1];
+                const berth_en = zoneEnabled[2];
+                const saloon_en = zoneEnabled[0];
 
-while True:
-    # 1. TOUCH/UI FIRST
-    # ui.tick() will:
-    #   - read touch
-    #   - update bar visuals
-    #   - update mode / priority / enabled flags
-    #   - update footer
-    #   - set ui.interaction_active and ui.recommended_sleep
-    #   - keep saloon_share / berth_share in sync with drags
-    ui.tick(sensors, servo_nodes)
+                if (saloon_en && galley_en && berth_en) {
+                    // 3 zones: Saloon stays constant, adjust Galley/Berth split
+                    barShares[2] = 100 - barShares[0] - barShares[1];
+                    barShares[2] = Math.max(0, Math.min(100, barShares[2]));
+                } else if (saloon_en && !berth_en) {
+                    // Only Saloon + Galley: affect Saloon
+                    barShares[0] = 100 - barShares[1];
+                    barShares[0] = Math.max(0, Math.min(100, barShares[0]));
+                } else if (!saloon_en && galley_en && berth_en) {
+                    // Only Galley + Berth enabled: keep total at 100 between them
+                    barShares[2] = 100 - barShares[1];
+                    barShares[2] = Math.max(0, Math.min(100, barShares[2]));
+                }
 
-    # 2. SERVO BLE MGMT + 3. TEMP/BEACONS
-    # Coordinate all central scanning (servo + ThermoBeacon) vs peripheral advertising
-    # The BLE adapter can only do ONE thing at a time: scan OR advertise
-    # Strategy: Always stop advertising before ticking, then restart after if nothing is scanning
-    if not ui.interaction_active:
-        # Stop advertising before any central operations (scanning might happen during tick)
-        pwa_bridge.pause_advertising()
+                console.log(`   🔧 Galley drag: S=${barShares[0].toFixed(1)}%, G=${barShares[1].toFixed(1)}%, B=${barShares[2].toFixed(1)}%`);
 
-        # Tick servo nodes (may start scanning)
-        for node in servo_nodes:
-            try:
-                node.tick()
-            except Exception as e:
-                print("[BLE] servo tick() error:", e)
+            } else if (draggingBarIndex === 2) {
+                // BERTH: only affects Galley (Saloon MUST stay constant with 3 zones)
+                const galley_en = zoneEnabled[1];
+                const berth_en = zoneEnabled[2];
+                const saloon_en = zoneEnabled[0];
 
-        # Tick ThermoBeacon scanner (may start scanning)
-        try:
-            sensors.tick()
-        except Exception as e:
-            print("[TB] sensors.tick() error:", e)
+                if (saloon_en && galley_en && berth_en) {
+                    // 3 zones: Saloon stays constant, adjust Galley/Berth split
+                    barShares[1] = 100 - barShares[0] - barShares[2];
+                    barShares[1] = Math.max(0, Math.min(100, barShares[1]));
+                } else if (saloon_en && !galley_en) {
+                    // Only Saloon + Berth: affect Saloon
+                    barShares[0] = 100 - barShares[2];
+                    barShares[0] = Math.max(0, Math.min(100, barShares[0]));
+                } else if (!saloon_en && galley_en && berth_en) {
+                    // Only Galley + Berth enabled: keep total at 100 between them
+                    barShares[1] = 100 - barShares[2];
+                    barShares[1] = Math.max(0, Math.min(100, barShares[1]));
+                }
 
-        # Check if anything is still scanning after ticks complete
-        servos_scanning = any(node.is_scanning() for node in servo_nodes)
-        try:
-            tb_scanning = sensors.is_scanning()
-        except Exception:
-            tb_scanning = False
+                console.log(`   🔧 Berth drag: S=${barShares[0].toFixed(1)}%, G=${barShares[1].toFixed(1)}%, B=${barShares[2].toFixed(1)}%`);
+            }
 
-        # Only resume advertising if nothing is actively scanning
-        if not servos_scanning and not tb_scanning:
-            pwa_bridge.resume_advertising()
+            updateBarVisuals();
+        }
 
-        # Refresh servo indicator visuals now that nodes have ticked
-        ui.refresh_servo_health(servo_nodes)
+        async function onBarDragEnd(e) {
+            if (draggingBarIndex === null) return;
 
-    # 3.5 PWA BLE bridge (keeps advertising / notifications lightweight)
-    try:
-        # Update sensor data from ThermoBeacons
-        pwa_bridge.update_sensors(sensors)
+            const bars = document.querySelectorAll('.airflow-bar');
+            bars.forEach(bar => bar.classList.remove('dragging'));
 
-        # Tick the bridge (handles advertising, connections, notifications)
-        pwa_bridge.tick(interaction_active=ui.interaction_active)
-    except Exception as e:
-        print("[PWA] bridge.tick() error:", e)
+            console.log(`🎯 Drag ended: S=${barShares[0].toFixed(1)}%, G=${barShares[1].toFixed(1)}%, B=${barShares[2].toFixed(1)}%`);
 
-    # 4. COMMIT ANY SERVO TARGETS (user finished a drag and cooled down)
-    pending = ui.get_pending_servo_targets_if_ready()
-    if pending:
-        # Actually send commands to nodes now 🚀
-        _send_servo_targets_to_nodes(pending, servo_nodes)
+            // Clear active preset on manual adjustment
+            clearActivePreset();
 
-    # 5. Sleep based on UI pacing (fast during drag, slower otherwise)
-    # NOTE: In your current testing you commented sleep out.
-    # Let's put it back because touch code often likes short sleeps,
-    # not busy loops that starve I2C.
-    time.sleep(ui.recommended_sleep)
+            // Convert display percentages to model values
+            const saloon_share = Math.round(barShares[0]);  // Saloon: absolute %
+            const downstream = 100 - saloon_share;
 
+            // Berth share: % of downstream flow going to Berth
+            const berth_share = downstream > 0 ? Math.round((barShares[2] / downstream) * 100) : 50;
+
+            // Determine what to send based on which bar was dragged and zone config
+            const saloon_en = zoneEnabled[0];
+            const galley_en = zoneEnabled[1];
+            const berth_en = zoneEnabled[2];
+
+            if (draggingBarIndex === 0) {
+                // Dragged Saloon - send saloon_share only
+                console.log(`📤 BLE TX: saloon_share=${saloon_share}%`);
+                await sendCommand(OP_SET_SHARE, 0, saloon_share);
+
+            } else if (draggingBarIndex === 1 && galley_en && !berth_en) {
+                // Dragged Galley with only 2 zones (Berth disabled)
+                // Send: saloon = 100 - galley, berth = 0
+                const galley_pct = Math.round(barShares[1]);
+                const new_saloon = 100 - galley_pct;
+                console.log(`📤 BLE TX (2-zone): saloon_share=${new_saloon}%, berth_share=0%`);
+                await sendCommand(OP_SET_SHARE, 0, new_saloon);
+                await sendCommand(OP_SET_SHARE, 1, 0);
+
+            } else if (draggingBarIndex === 2 && berth_en && !galley_en) {
+                // Dragged Berth with only 2 zones (Galley disabled)
+                // Send: saloon = 100 - berth, berth = 100
+                const berth_pct = Math.round(barShares[2]);
+                const new_saloon = 100 - berth_pct;
+                console.log(`📤 BLE TX (2-zone): saloon_share=${new_saloon}%, berth_share=100%`);
+                await sendCommand(OP_SET_SHARE, 0, new_saloon);
+                await sendCommand(OP_SET_SHARE, 1, 100);
+
+            } else {
+                // Dragged Galley or Berth with 3 zones - only send berth_share
+                console.log(`📤 BLE TX: berth_share=${berth_share}%`);
+                await sendCommand(OP_SET_SHARE, 1, berth_share);
+            }
+
+            // Ignore BLE updates for 1200ms - trust our dragged values
+            // Device needs time to process command and send updated state
+            ignoreBleDateUntil = Date.now() + 1200;
+
+            draggingBarIndex = null;
+            dragStartY = null;
+            dragStartShares = null;
+        }
+
+        function updateBarVisuals() {
+            for (let i = 0; i < 3; i++) {
+                const zoneName = ZONE_NAMES[i];
+                const bar = document.getElementById(`bar${zoneName}`);
+                const value = document.getElementById(`value${zoneName}`);
+
+                const percent = Math.round(barShares[i]);
+                bar.style.height = `${percent}%`;
+                value.textContent = `${percent}%`;
+
+                // Handle disabled state
+                if (!zoneEnabled[i]) {
+                    bar.classList.add('disabled');
+                    value.classList.add('disabled');
+                } else {
+                    bar.classList.remove('disabled');
+                    value.classList.remove('disabled');
+                }
+
+                // Handle priority state (orange bar in AUTO mode)
+                const isPriority = currentMode === 'AUTO' && currentPriority === i;
+                bar.classList.toggle('priority', isPriority);
+            }
+        }
+
+        // ===== PRESETS =====
+
+        // Preset configurations (Saloon, Galley, Berth percentages)
+        const PRESET_COMMAND_DELAY_MS = 350;
+        const MAX_PRESET_LABEL_LEN = 10;
+        const PRESET_SHARE_TOLERANCE = 2; // acceptable +/- range when validating preset state
+        const PRESETS = {
+            even: [33, 33, 34],
+            saloon: [65, 25, 10],
+            sleep: [10, 10, 80],
+            cooking: [20, 70, 10],
+            allsaloon: [100, 0, 0]
+        };
+
+        let activePreset = null;  // Track which preset is currently active
+        let activePresetShares = null; // Snapshot of applied S/G/B
+
+        function getPresetLabel(presetId) {
+            const btn = document.querySelector(`button[data-preset="${presetId}"] .preset-name`);
+            if (btn && btn.textContent) {
+                return btn.textContent.trim();
+            }
+            return presetId ? presetId.replace(/_/g, ' ') : 'PRESET';
+        }
+
+        async function broadcastPresetInfo(label, shares) {
+            if (!commandChar) return;
+
+            const upperLabel = (label || '').toUpperCase().replace(/[^A-Z0-9 /-]/g, '').trim();
+            const trimmed = upperLabel.slice(0, MAX_PRESET_LABEL_LEN);
+            const labelBytes = Array.from(trimmed).map(ch => ch.charCodeAt(0));
+
+            const shareBytes = Array.isArray(shares) && shares.length === 3
+                ? shares.map(v => clamp(Math.round(v), 0, 100))
+                : [0, 0, 0];
+
+            await sendCommand(
+                OP_SET_PRESET_INFO,
+                labelBytes.length,
+                ...labelBytes,
+                ...shareBytes
+            );
+        }
+
+        async function preparePresetEnvironment() {
+            let changed = false;
+            const targetZones = [...zoneEnabled];
+
+            // Clear priority if active
+            if (currentPriority !== null) {
+                console.log('⚠️ Clearing priority before applying preset');
+                await sendCommand(OP_CLEAR_PRIORITY);
+                currentPriority = null;
+                updatePriorityUI();
+                changed = true;
+                await new Promise(resolve => setTimeout(resolve, 150));
+            }
+
+            // Re-enable any disabled zones
+            const disabled = zoneEnabled
+                .map((enabled, idx) => (!enabled ? idx : null))
+                .filter(idx => idx !== null);
+
+            for (const idx of disabled) {
+                console.log(`⚙️ Re-enabling ${ZONE_NAMES[idx]} for preset`);
+                await sendCommand(OP_SET_ZONE_ENABLED, idx, 1);
+                zoneEnabled[idx] = true;
+                targetZones[idx] = true;
+                updateZoneUI(idx);
+                changed = true;
+                await new Promise(resolve => setTimeout(resolve, 120));
+            }
+
+            if (changed) {
+                // Give the device a short window to settle before sending shares
+                ignoreBleDateUntil = Date.now() + 800;
+            }
+
+            return { changed, targetZones };
+        }
+
+        async function applyPreset(presetId) {
+            // If already active, deactivate it
+            if (activePreset === presetId) {
+                clearActivePreset();
+                return;
+            }
+
+            // Get preset values
+            let values;
+            let presetLabel = null;
+            if (PRESETS[presetId]) {
+                values = PRESETS[presetId];
+                presetLabel = getPresetLabel(presetId);
+            } else {
+                // Check if it's a custom preset
+                const customPresets = loadCustomPresets();
+                const custom = customPresets.find(p => p.id === presetId);
+                if (!custom) return;
+                values = custom.values;
+                presetLabel = custom.name || presetId;
+            }
+
+            // Ensure MANUAL mode before applying preset
+            if (currentMode !== 'MANUAL') {
+                console.log('ℹ️ Preset requested in AUTO mode, switching to MANUAL');
+                await setMode(false);
+                currentMode = 'MANUAL';
+                updateModeUI();
+                await new Promise(resolve => setTimeout(resolve, 180));
+            }
+
+            const prepResult = await preparePresetEnvironment();
+            const zoneSnapshot = (prepResult && prepResult.targetZones) ? prepResult.targetZones : [...zoneEnabled];
+
+            // Apply the preset values
+            barShares = [...values];
+            updateBarVisuals();
+
+            // Ignore BLE updates immediately - before sending commands
+            // This prevents the first command's state notification from overwriting bars
+            ignoreBleDateUntil = Date.now() + 1500;
+
+            // Convert display percentages to model values and send to device
+            // Use the same logic as onBarDragEnd to handle different zone configurations
+            const saloon_share = Math.round(barShares[0]);
+            const downstream = 100 - saloon_share;
+            const berth_share = downstream > 0 ? Math.round((barShares[2] / downstream) * 100) : 50;
+
+            console.log(`🎯 Applying preset "${presetId}": S=${barShares[0]}%, G=${barShares[1]}%, B=${barShares[2]}%`);
+
+            // Check zone configuration
+            const saloon_en = zoneSnapshot[0];
+            const galley_en = zoneSnapshot[1];
+            const berth_en = zoneSnapshot[2];
+
+            // Send commands based on which zones are enabled (matches onBarDragEnd logic)
+            // IMPORTANT: Always send Saloon (servo 0) first, then Berth (servo 1) after delay
+            // This respects the physical airflow hierarchy: Saloon takes first, then downstream splits
+            if (saloon_en && galley_en && berth_en) {
+                // All 3 zones enabled: send both servo commands
+                console.log(`📤 BLE TX (3-zone): saloon_share=${saloon_share}%, berth_share=${berth_share}%`);
+                await sendCommand(OP_SET_SHARE, 0, saloon_share);
+                await new Promise(resolve => setTimeout(resolve, PRESET_COMMAND_DELAY_MS));
+                await sendCommand(OP_SET_SHARE, 1, berth_share);
+            } else if (saloon_en && galley_en && !berth_en) {
+                // Only Saloon + Galley: send saloon and berth=0
+                console.log(`📤 BLE TX (2-zone S+G): saloon_share=${saloon_share}%, berth_share=0%`);
+                await sendCommand(OP_SET_SHARE, 0, saloon_share);
+                await new Promise(resolve => setTimeout(resolve, PRESET_COMMAND_DELAY_MS));
+                await sendCommand(OP_SET_SHARE, 1, 0);
+            } else if (saloon_en && !galley_en && berth_en) {
+                // Only Saloon + Berth: send saloon and berth=100
+                console.log(`📤 BLE TX (2-zone S+B): saloon_share=${saloon_share}%, berth_share=100%`);
+                await sendCommand(OP_SET_SHARE, 0, saloon_share);
+                await new Promise(resolve => setTimeout(resolve, PRESET_COMMAND_DELAY_MS));
+                await sendCommand(OP_SET_SHARE, 1, 100);
+            } else if (!saloon_en && galley_en && berth_en) {
+                // Only Galley + Berth: send saloon=0 and berth_share
+                console.log(`📤 BLE TX (2-zone G+B): saloon_share=0%, berth_share=${berth_share}%`);
+                await sendCommand(OP_SET_SHARE, 0, 0);
+                await new Promise(resolve => setTimeout(resolve, PRESET_COMMAND_DELAY_MS));
+                await sendCommand(OP_SET_SHARE, 1, berth_share);
+            } else {
+                // Single zone or other config: just send both
+                console.log(`📤 BLE TX (default): saloon_share=${saloon_share}%, berth_share=${berth_share}%`);
+                await sendCommand(OP_SET_SHARE, 0, saloon_share);
+                await new Promise(resolve => setTimeout(resolve, PRESET_COMMAND_DELAY_MS));
+                await sendCommand(OP_SET_SHARE, 1, berth_share);
+            }
+
+            // Mark this preset as active
+            const appliedShares = [
+                Math.round(barShares[0]),
+                Math.round(barShares[1]),
+                Math.round(barShares[2])
+            ];
+            activePreset = presetId;
+            activePresetShares = appliedShares;
+            updatePresetUI();
+
+            // Ignore BLE updates for 1200ms
+            ignoreBleDateUntil = Date.now() + 1200;
+
+            // Allow the device a brief window to drain prior commands before sending metadata
+            await new Promise(resolve => setTimeout(resolve, PRESET_COMMAND_DELAY_MS));
+
+            // Share preset metadata with the nRF UI
+            await broadcastPresetInfo(presetLabel, appliedShares);
+        }
+
+        function clearActivePreset() {
+            if (activePreset === null) return;
+            activePreset = null;
+            activePresetShares = null;
+            updatePresetUI();
+
+            // Inform the nRF that no preset is active
+            broadcastPresetInfo('', null);
+        }
+
+        function evaluatePresetValidity(deviceShares) {
+            if (activePreset === null) return;
+
+            const anyZoneDisabled = zoneEnabled.some(enabled => !enabled);
+            if (currentMode !== 'MANUAL' || anyZoneDisabled) {
+                console.log('⚠️ Clearing preset - mode/zones changed remotely');
+                clearActivePreset();
+                return;
+            }
+
+            if (!activePresetShares || !Array.isArray(deviceShares) || deviceShares.length !== 3) {
+                return;
+            }
+
+            const mismatch = deviceShares.some((value, idx) => {
+                const rounded = Math.round(value);
+                const baseline = activePresetShares[idx] ?? rounded;
+                return Math.abs(rounded - baseline) > PRESET_SHARE_TOLERANCE;
+            });
+
+            if (mismatch) {
+                console.log('⚠️ Clearing preset - remote adjustment detected');
+                clearActivePreset();
+            }
+        }
+
+        function updatePresetUI() {
+            // Update all preset buttons
+            document.querySelectorAll('.preset-btn, .custom-preset-btn').forEach(btn => {
+                const presetId = btn.getAttribute('data-preset');
+                if (presetId === activePreset) {
+                    btn.classList.add('active');
+                } else {
+                    btn.classList.remove('active');
+                }
+            });
+        }
+
+        function saveCustomPreset() {
+            // Prompt for name
+            const name = prompt('Enter a name for this preset:');
+            if (!name || name.trim() === '') return;
+
+            // Get current bar shares
+            const values = [
+                Math.round(barShares[0]),
+                Math.round(barShares[1]),
+                Math.round(barShares[2])
+            ];
+
+            // Create preset object
+            const preset = {
+                id: 'custom_' + Date.now(),
+                name: name.trim(),
+                values: values
+            };
+
+            // Load existing presets
+            const customPresets = loadCustomPresets();
+            customPresets.push(preset);
+
+            // Save to localStorage
+            localStorage.setItem('customPresets', JSON.stringify(customPresets));
+
+            // Re-render custom presets
+            renderCustomPresets();
+
+            console.log(`💾 Saved custom preset: ${name} (${values.join('/')})`);
+        }
+
+        function loadCustomPresets() {
+            try {
+                const saved = localStorage.getItem('customPresets');
+                return saved ? JSON.parse(saved) : [];
+            } catch (e) {
+                console.error('Failed to load custom presets:', e);
+                return [];
+            }
+        }
+
+        function deleteCustomPreset(presetId) {
+            if (!confirm('Delete this custom preset?')) return;
+
+            // Load existing presets
+            let customPresets = loadCustomPresets();
+
+            // Remove the preset
+            customPresets = customPresets.filter(p => p.id !== presetId);
+
+            // Save back to localStorage
+            localStorage.setItem('customPresets', JSON.stringify(customPresets));
+
+            // Clear active if this was active
+            if (activePreset === presetId) {
+                clearActivePreset();
+            }
+
+            // Re-render
+            renderCustomPresets();
+
+            console.log(`🗑️ Deleted custom preset: ${presetId}`);
+        }
+
+        function renderCustomPresets() {
+            const container = document.getElementById('customPresetsContainer');
+            const customPresets = loadCustomPresets();
+
+            if (customPresets.length === 0) {
+                container.innerHTML = '';
+                return;
+            }
+
+            const buttons = customPresets.map(preset => `
+                <div class="custom-preset-wrapper">
+                    <button class="custom-preset-btn" data-preset="${preset.id}" onclick="applyPreset('${preset.id}')">
+                        <div class="preset-name">${preset.name}</div>
+                        <div class="preset-values">${preset.values.join(' / ')}</div>
+                    </button>
+                    <span class="custom-preset-delete" onclick="deleteCustomPreset('${preset.id}')">×</span>
+                </div>
+            `).join('');
+
+            container.innerHTML = `<div class="custom-presets-grid">${buttons}</div>`;
+        }
+
+        // Initialize when page loads
+        window.addEventListener('load', () => {
+            initAirflowBars();
+            initializeZoneIndicators();
+            renderCustomPresets();
+        });
+
+        // Register service worker for PWA
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('sw.js');
+        }
+    </script>
+</body>
+</html>
